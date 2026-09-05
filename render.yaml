@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: confluence-docx-editor
+    env: node
+    buildCommand: npm install && apt-get update && apt-get install -y pandoc
+    startCommand: node server.js
+    plan: free
