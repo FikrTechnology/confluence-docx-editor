@@ -1,0 +1,26 @@
+{
+  "name": "confluence-docx-editor",
+  "version": "1.0.0",
+  "description": "Confluence document editor",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FikrTechnology/confluence-docx-editor.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/FikrTechnology/confluence-docx-editor/issues"
+  },
+  "homepage": "https://github.com/FikrTechnology/confluence-docx-editor#readme",
+  "dependencies": {
+    "express": "^5.2.1",
+    "express-fileupload": "^1.5.2",
+    "fs-extra": "^11.4.0"
+  }
+}

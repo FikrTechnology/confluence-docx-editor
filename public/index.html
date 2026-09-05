@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solution Analyst - Arsitektur Editor</title>
+  
+  <!-- MENGGUNAKAN VERSI OPEN SOURCE DARI CLOUDFLARE (TIDAK PERLU API KEY) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js"></script>
+  
+  <style>
+    html, body { margin: 0; padding: 0; height: 100vh; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; }
+    .navbar { background-color: #172b4d; color: white; padding: 12px 24px; z-index: 10; }
+    .navbar h2 { margin: 0; font-size: 18px; font-weight: 600; }
+    .toolbar { background-color: #f4f5f7; padding: 10px 24px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #dfe1e6; }
+    .btn { background-color: #0052cc; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 14px; }
+    .btn:hover { background-color: #0065ff; }
+    .btn-success { background-color: #36b37e; margin-left: auto; }
+    .btn-success:hover { background-color: #2b825c; }
+    input[type="file"] { border: 1px solid #dfe1e6; padding: 6px; border-radius: 4px; background: #fff; font-size: 13px; cursor: pointer; }
+    .editor-wrapper { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
+  </style>
+</head>
+<body>
+
+<div class="navbar">
+  <h2>Dokumen Arsitektur Editor</h2>
+</div>
+
+<div class="toolbar">
+  <input type="file" id="fileInput" accept=".docx">
+  <button class="btn" onclick="uploadDocument()">📖 Buka Dokumen</button>
+  <button class="btn btn-success" onclick="downloadDocument()">💾 Download .docx</button>
+</div>
+
+<div class="editor-wrapper">
+  <textarea id="editor"></textarea>
+</div>
+
+<script>
+  tinymce.init({
+    selector: '#editor',
+    height: '100%',
+    width: '100%',
+    menubar: 'file edit view insert format tools table help',
+    plugins: 'table lists link code image advlist fullscreen paste wordcount',
+    toolbar: 'undo redo | blocks | bold italic forecolor backcolor | alignleft aligncenter alignright | table tabledelete | numlist bullist | image fullscreen',
+    paste_data_images: true,
+    promotion: false, // Menghilangkan tombol upgrade
+    branding: false,  // Menghilangkan logo TinyMCE
+    
+    content_style: `
+      body { 
+        font-family: Arial, sans-serif; 
+        font-size: 14px; 
+        line-height: 1.6; 
+        margin: 0; 
+        padding: 20px; 
+        background-color: white; 
+      }
+      table { border-collapse: collapse; width: 100%; table-layout: auto; margin-bottom: 15px; } 
+      td, th { border: 1px solid #ccc; padding: 8px; vertical-align: top; word-wrap: break-word; }
+      img { max-width: 100%; height: auto; display: block; margin: 10px 0; }
+    `,
+    setup: function (editor) {
+      editor.on('init', function () {
+        editor.getBody().setAttribute('contenteditable', true);
+      });
+    }
+  });
+
+  async function uploadDocument() {
+    const fileInput = document.getElementById('fileInput');
+    if (!fileInput.files[0]) return alert('Pilih file .docx terlebih dahulu!');
+
+    const formData = new FormData();
+    formData.append('document', fileInput.files[0]);
+
+    try {
+      document.querySelector('.btn').innerText = "⏳ Membuka...";
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Pembersihan agresif untuk dokumen Confluence
+        let cleanHtml = data.html
+          .replace(/contenteditable="false"/gi, 'contenteditable="true"')
+          .replace(/readonly/gi, '')
+          .replace(/disabled/gi, '');
+        
+        tinymce.get('editor').setContent(cleanHtml);
+      } else {
+        alert('Gagal membuka file.');
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan koneksi.');
+    } finally {
+      document.querySelector('.btn').innerText = "📖 Buka Dokumen";
+    }
+  }
+
+  async function downloadDocument() {
+    const htmlContent = tinymce.get('editor').getContent();
+    if (!htmlContent) return alert('Tidak ada konten untuk diunduh.');
+
+    try {
+      document.querySelector('.btn-success').innerText = "⏳ Memproses...";
+      
+      const response = await fetch('/api/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ htmlContent })
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Dokumen_Arsitektur_Updated.docx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } else {
+        alert('Gagal mengunduh file.');
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan koneksi.');
+    } finally {
+      document.querySelector('.btn-success').innerText = "💾 Download .docx";
+    }
+  }
+</script>
+
+</body>
+</html>
