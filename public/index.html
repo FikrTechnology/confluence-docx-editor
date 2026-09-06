@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Solution Analyst - Arsitektur Editor</title>
   
-  <!-- MENGGUNAKAN VERSI OPEN SOURCE DARI CLOUDFLARE (TIDAK PERLU API KEY) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js"></script>
   
   <style>
@@ -46,9 +45,40 @@
     plugins: 'table lists link code image advlist fullscreen paste wordcount',
     toolbar: 'undo redo | blocks | bold italic forecolor backcolor | alignleft aligncenter alignright | table tabledelete | numlist bullist | image fullscreen',
     paste_data_images: true,
-    promotion: false, // Menghilangkan tombol upgrade
-    branding: false,  // Menghilangkan logo TinyMCE
+    promotion: false, 
+    branding: false,  
     
+    // Fitur Upload Gambar Lokal ke Base64 (Mengatasi isu URL Blob)
+    image_title: true,
+    automatic_uploads: true,
+    file_picker_types: 'image',
+    file_picker_callback: function (cb, value, meta) {
+      var input = document.createElement('input');
+      input.setAttribute('type', 'file');
+      input.setAttribute('accept', 'image/*');
+
+      input.onchange = function () {
+        var file = this.files[0];
+        var reader = new FileReader();
+        reader.onload = function () {
+          var id = 'blobid' + (new Date()).getTime();
+          var blobCache =  tinymce.activeEditor.editorUpload.blobCache;
+          var base64 = reader.result.split(',')[1];
+          var blobInfo = blobCache.create(id, file, base64);
+          blobCache.add(blobInfo);
+          cb(blobInfo.blobUri(), { title: file.name });
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    },
+    // Memaksa semua gambar (termasuk paste) menjadi Base64 string murni
+    images_upload_handler: function (blobInfo, progress) {
+      return new Promise((resolve, reject) => {
+        resolve('data:' + blobInfo.blob().type + ';base64,' + blobInfo.base64());
+      });
+    },
+
     content_style: `
       body { 
         font-family: Arial, sans-serif; 
@@ -87,7 +117,6 @@
       if (response.ok) {
         const data = await response.json();
         
-        // Pembersihan agresif untuk dokumen Confluence
         let cleanHtml = data.html
           .replace(/contenteditable="false"/gi, 'contenteditable="true"')
           .replace(/readonly/gi, '')
@@ -95,10 +124,10 @@
         
         tinymce.get('editor').setContent(cleanHtml);
       } else {
-        alert('Gagal membuka file.');
+        alert('Gagal membuka file. Pastikan proses konversi di server berhasil.');
       }
     } catch (err) {
-      alert('Terjadi kesalahan koneksi.');
+      alert('Terjadi kesalahan koneksi ke server.');
     } finally {
       document.querySelector('.btn').innerText = "📖 Buka Dokumen";
     }
