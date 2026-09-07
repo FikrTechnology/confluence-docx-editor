@@ -21,6 +21,8 @@
   "dependencies": {
     "express": "^5.2.1",
     "express-fileupload": "^1.5.2",
-    "fs-extra": "^11.4.0"
+    "fs-extra": "^11.4.0",
+    "html-to-docx": "^1.8.0",
+    "jszip": "^3.10.1"
   }
 }

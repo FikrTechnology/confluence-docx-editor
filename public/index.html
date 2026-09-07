@@ -5,66 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Solution Analyst - Arsitektur Editor</title>
 
-  <!-- Script TinyMCE -->
+  <!-- TinyMCE CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js"></script>
-  <!-- Script LocalForage (Untuk Cache File Besar / Bypass Limit 5MB) -->
+  <!-- LocalForage CDN (Cache penyimpanan draf besar) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
   <style>
     html, body { 
-      margin: 0; 
-      padding: 0; 
-      height: 100vh; 
-      overflow: hidden; 
+      margin: 0; padding: 0; height: 100vh; overflow: hidden; 
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-      display: flex; 
-      flex-direction: column; 
+      display: flex; flex-direction: column; 
     }
     .navbar { 
-      background-color: #172b4d; 
-      color: white; 
-      padding: 12px 24px; 
-      z-index: 10; 
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      background-color: #172b4d; color: white; padding: 12px 24px; z-index: 10; display: flex; justify-content: space-between; align-items: center;
     }
     .navbar h2 { margin: 0; font-size: 18px; font-weight: 600; }
-    
-    .status-badge { 
-      font-size: 13px; 
-      background: #42526e; 
-      padding: 6px 12px; 
-      border-radius: 4px; 
-      font-weight: bold; 
-      transition: all 0.3s;
-    }
+    .status-badge { font-size: 13px; background: #42526e; padding: 6px 12px; border-radius: 4px; font-weight: bold; transition: all 0.3s; }
     .status-success { background: #36b37e; color: white; }
     .status-error { background: #ff5630; color: white; }
     .status-warning { background: #ffab00; color: #172b4d; }
     
-    .toolbar { 
-      background-color: #f4f5f7; 
-      padding: 10px 24px; 
-      display: flex; 
-      gap: 12px; 
-      align-items: center; 
-      border-bottom: 1px solid #dfe1e6; 
-      flex-wrap: wrap;
-    }
-    .btn { 
-      background-color: #0052cc; 
-      color: white; 
-      border: none; 
-      padding: 8px 14px; 
-      border-radius: 4px; 
-      cursor: pointer; 
-      font-weight: 600; 
-      font-size: 13px; 
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-    }
+    .toolbar { background-color: #f4f5f7; padding: 10px 24px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #dfe1e6; flex-wrap: wrap; }
+    .btn { background-color: #0052cc; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; }
     .btn:hover { background-color: #0065ff; }
     .btn-secondary { background-color: #ff991f; color: #172b4d; }
     .btn-secondary:hover { background-color: #e2871b; }
@@ -73,14 +35,7 @@
     .btn-danger { background-color: #ff5630; color: white; }
     .btn-danger:hover { background-color: #de4420; }
     
-    .zoom-controls {
-      display: flex;
-      align-items: center;
-      background: #fff;
-      border: 1px solid #dfe1e6;
-      border-radius: 4px;
-      overflow: hidden;
-    }
+    .zoom-controls { display: flex; align-items: center; background: #fff; border: 1px solid #dfe1e6; border-radius: 4px; overflow: hidden; }
     .zoom-btn { background: #fff; border: none; padding: 6px 10px; cursor: pointer; font-weight: bold; }
     .zoom-btn:hover { background: #ebecf0; }
     .zoom-label { padding: 0 8px; font-size: 13px; min-width: 45px; text-align: center; }
@@ -125,7 +80,6 @@
     statusEl.className = `status-badge status-${type}`;
   }
 
-  // Set database localforage (Mampu menyimpan file ratusan MB)
   localforage.config({
     name: 'DocxEditorCache',
     storeName: 'draft_data'
@@ -137,18 +91,16 @@
     width: '100%',
     menubar: 'file edit view insert format tools table help',
     plugins: 'table lists link code image advlist fullscreen paste wordcount',
-    toolbar: 'undo redo | blocks | bold italic forecolor backcolor | alignleft aligncenter alignright | table tabledelete | numlist bullist | image fullscreen',
+    toolbar: 'undo redo | blocks | bold italic forecolor backcolor | alignleft aligncenter alignright alignjustify | table tabledelete | numlist bullist | image fullscreen',
     paste_data_images: true,
     promotion: false, 
     branding: false,  
-    
-    // Konfigurasi agar tabel lebih mudah di-resize
     table_column_resizing: 'resizetable',
     table_resize_bars: true,
-    
     image_title: true,
     automatic_uploads: true,
     file_picker_types: 'image',
+    
     file_picker_callback: function (cb, value, meta) {
       var input = document.createElement('input');
       input.setAttribute('type', 'file');
@@ -172,57 +124,32 @@
       return new Promise((resolve) => resolve('data:' + blobInfo.blob().type + ';base64,' + blobInfo.base64()));
     },
 
-    // PERBAIKAN CSS Tabel (Mengatasi teks panjang yang mengunci lebar kolom)
     content_style: `
-      body { 
-        font-family: 'Segoe UI', Arial, sans-serif; 
-        font-size: 14px; 
-        line-height: 1.6; 
-        margin: 0; 
-        padding: 20px; 
-        background-color: white; 
-        width: 100%;
-        box-sizing: border-box;
-        transition: transform 0.2s ease-in-out;
-        transform-origin: top left;
-      }
-      table { 
-        border-collapse: collapse; 
-        width: 100%; 
-        table-layout: auto; /* Bisa diganti fixed jika ingin rata sempurna, namun auto lebih cocok untuk data dinamis */
-        margin-bottom: 15px; 
-      } 
-      td, th { 
-        border: 1px solid #ccc; 
-        padding: 8px; 
-        vertical-align: top; 
-        word-wrap: break-word; 
-        overflow-wrap: break-word; 
-        word-break: break-all; /* Paksa potong teks yang tidak berspasi */
-        min-width: 30px;
-      }
+      body { font-family: 'Segoe UI', Calibri, Arial, sans-serif; font-size: 14px; line-height: 1.6; margin: 0; padding: 25px; background-color: #ffffff; color: #000000; box-sizing: border-box; transition: transform 0.2s ease-in-out; transform-origin: top left; }
+      table { border-collapse: collapse; width: 100%; margin: 15px 0; border: 1px solid #000000; }
+      td, th { border: 1px solid #000000; padding: 8px; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; word-break: break-word; }
+      th { font-weight: bold; background-color: #f2f2f2; }
       img { max-width: 100%; height: auto; display: block; margin: 10px 0; }
+      p { margin-top: 0; margin-bottom: 0.8em; }
     `,
     setup: function (editor) {
       editor.on('init', function () {
         editor.getBody().setAttribute('contenteditable', true);
         
-        // Load Draf menggunakan LocalForage (IndexedDB untuk file besar)
         localforage.getItem('docx_editor_draft').then(function(savedDraft) {
           if (savedDraft && savedDraft.trim() !== '') {
             editor.setContent(savedDraft);
             setStatus('✓ Draf Dipulihkan (Ingat: Hubungan file lokal terputus karena refresh)', 'warning');
           }
         }).catch(function(err) {
-            console.error('Gagal mengambil cache: ', err);
+            console.error('Gagal mengambil cache:', err);
         });
       });
 
-      // Simpan menggunakan LocalForage (Tidak akan Error Quota 5MB)
       editor.on('keyup change ExecCommand Undo Redo', function () {
         const content = editor.getContent();
         localforage.setItem('docx_editor_draft', content).then(function () {
-          setStatus('✓ Tersimpan Sementara (Draf Besar Aman)', 'success');
+          setStatus('✓ Tersimpan Sementara (Draf Aman)', 'success');
         }).catch(function(err) {
           setStatus('⚠️ Gagal menyimpan ke cache.', 'error');
         });
@@ -240,6 +167,131 @@
     document.getElementById('zoomLabel').innerText = `${currentZoom}%`;
   }
 
+  // Normalize incoming HTML untuk mencegah nested table terlalu rapat
+  function normalizeNestedTableLayout(htmlContent) {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent;
+
+    // 1. Hapus colgroup yang mengunci lebar kolom terlalu kecil
+    tempDiv.querySelectorAll('colgroup').forEach(cg => cg.remove());
+
+    // 2. Process semua nested table (table dalam table)
+    tempDiv.querySelectorAll('table table').forEach(nestedTable => {
+      // Pastikan nested table punya lebar reasonable
+      nestedTable.setAttribute('border', '1');
+      nestedTable.setAttribute('cellpadding', '6');
+      nestedTable.setAttribute('cellspacing', '0');
+      
+      let style = nestedTable.getAttribute('style') || '';
+      // Hapus width fixed yang bikin rapat
+      style = style.replace(/width:\s*[0-9.]+\s*(px|%|pt)/gi, '');
+      // Tambah property yang sesuai
+      if (!style.includes('border-collapse')) style += '; border-collapse: collapse';
+      if (!style.includes('width:')) style += '; width: 100%';
+      if (!style.includes('margin')) style += '; margin: 4px 0';
+      nestedTable.setAttribute('style', style.replace(/^\s*;\s*/, '').trim());
+
+      // Process cell dalam nested table
+      nestedTable.querySelectorAll('td, th').forEach(cell => {
+        let cellStyle = cell.getAttribute('style') || '';
+        // Jangan set width fixed yang bikin kolom rapat
+        cellStyle = cellStyle.replace(/width:\s*[0-9.]+\s*(px|%|pt)/gi, '');
+        // Ensure padding dan border
+        if (!cellStyle.includes('padding')) cellStyle += '; padding: 4px 6px';
+        if (!cellStyle.includes('border')) cellStyle += '; border: 1px solid #999';
+        if (!cellStyle.includes('vertical-align')) cellStyle += '; vertical-align: top';
+        cell.setAttribute('style', cellStyle.replace(/^\s*;\s*/, '').trim());
+      });
+    });
+
+    // 3. Process main table juga
+    tempDiv.querySelectorAll('table').forEach(table => {
+      // Skip jika sudah nested (handled di atas)
+      if (table.querySelector('table')) return;
+      
+      table.setAttribute('border', '1');
+      table.setAttribute('cellpadding', '6');
+      table.setAttribute('cellspacing', '0');
+      
+      let style = table.getAttribute('style') || '';
+      if (!style.includes('border-collapse')) style += '; border-collapse: collapse';
+      if (!style.includes('width:')) style += '; width: 100%';
+      table.setAttribute('style', style.replace(/^\s*;\s*/, '').trim());
+    });
+
+    return tempDiv.innerHTML;
+  }
+
+  // MENYESUAIKAN HTML DENGAN INLINE STYLE AGAR PANDOC MEMBACA STRUKTUR SECARA 1:1
+  function enhanceHtmlForDownload(htmlContent) {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent;
+    
+    // 1. Format Tabel & Cell secara presisi
+    tempDiv.querySelectorAll('table').forEach(table => {
+      table.setAttribute('border', '1');
+      table.style.borderCollapse = 'collapse';
+      table.style.width = '100%';
+      table.style.border = '1px solid #000000';
+      table.style.marginTop = '10px';
+      table.style.marginBottom = '10px';
+
+      table.querySelectorAll('th, td').forEach(cell => {
+        cell.style.border = '1px solid #000000';
+        cell.style.padding = '6px 8px';
+        cell.style.verticalAlign = 'top';
+        
+        if (cell.tagName.toLowerCase() === 'th') {
+          cell.style.fontWeight = 'bold';
+          cell.style.backgroundColor = '#f2f2f2';
+        }
+      });
+    });
+
+    // 2. Konversi Ukuran Gambar dari CSS ke Atribut HTML Murni (Dipahami oleh Pandoc)
+    tempDiv.querySelectorAll('img').forEach(img => {
+      let width = img.style.width || img.getAttribute('width');
+      let height = img.style.height || img.getAttribute('height');
+
+      if (width) {
+        let cleanWidth = width.toString().replace('px', '').replace('%', '');
+        img.setAttribute('width', cleanWidth);
+        img.style.width = cleanWidth + 'px';
+      }
+      if (height) {
+        let cleanHeight = height.toString().replace('px', '').replace('%', '');
+        img.setAttribute('height', cleanHeight);
+        img.style.height = cleanHeight + 'px';
+      }
+      img.style.display = 'block';
+    });
+
+    // 3. Pastikan Paragraf dan Heading Memiliki Spasi & Font Presisi
+    tempDiv.querySelectorAll('p').forEach(p => {
+      p.style.fontFamily = "'Segoe UI', Calibri, Arial, sans-serif";
+      p.style.fontSize = "11pt";
+      p.style.lineHeight = "1.5";
+      p.style.marginBottom = "8pt";
+    });
+
+    tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => {
+      h.style.fontFamily = "'Segoe UI', Arial, sans-serif";
+      h.style.color = "#111111";
+      h.style.marginTop = "12pt";
+      h.style.marginBottom = "4pt";
+    });
+
+    // 4. Bersihkan Atribut Internal TinyMCE
+    tempDiv.querySelectorAll('[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
+    tempDiv.querySelectorAll('*').forEach(el => {
+      Array.from(el.attributes)
+        .filter(attr => attr.name.startsWith('data-mce-'))
+        .forEach(attr => el.removeAttribute(attr.name));
+    });
+    
+    return tempDiv.innerHTML;
+  }
+
   // Buka Dokumen
   async function openDocument() {
     try {
@@ -254,7 +306,7 @@
         document.getElementById('fallbackFileInput').click();
       }
     } catch (err) {
-      console.log('Batal memilih file');
+      console.log('Batal memilih file.');
     }
   }
 
@@ -273,7 +325,7 @@
       setStatus('Sedang mengonversi dokumen...', 'warning');
       
       const response = await fetch('/api/upload', { method: 'POST', body: formData });
-      if (!response.ok) throw new Error('Gagal koneksi ke server');
+      if (!response.ok) throw new Error('Gagal koneksi ke server.');
       
       const data = await response.json();
       let cleanHtml = data.html
@@ -281,9 +333,11 @@
         .replace(/readonly/gi, '')
         .replace(/disabled/gi, '');
       
+      // Normalize nested table layout sebelum load ke editor
+      cleanHtml = normalizeNestedTableLayout(cleanHtml);
+      
       tinymce.get('editor').setContent(cleanHtml);
       
-      // Simpan ke Cache Besar
       localforage.setItem('docx_editor_draft', cleanHtml).catch(function(err) {
         console.warn('Gagal menyimpan cache baru.');
       });
@@ -297,7 +351,6 @@
     }
   }
 
-  // Tutup Dokumen & Bersihkan Cache
   function closeDocument() {
     if (confirm("Yakin ingin menutup dokumen? Pastikan perubahan sudah Anda simpan atau download.")) {
       localforage.removeItem('docx_editor_draft').then(function() {
@@ -309,15 +362,16 @@
     }
   }
 
-  // Simpan Timpa File Lokal
   async function saveDirectlyToFile() {
-    const htmlContent = tinymce.get('editor').getContent();
+    let htmlContent = tinymce.get('editor').getContent();
     if (!htmlContent) return setStatus('❌ Tidak ada konten untuk disimpan.', 'error');
     
     if (!fileHandle) {
-      setStatus('⚠️ Akses file hilang karena refresh. Gunakan Download.', 'error');
+      setStatus('⚠️ Akses file hilang karena refresh. Mengalihkan ke Download...', 'error');
       return downloadDocument();
     }
+
+    htmlContent = enhanceHtmlForDownload(htmlContent);
 
     const btnSimpan = document.querySelector('.btn-secondary');
     const originalText = btnSimpan.innerText;
@@ -332,7 +386,6 @@
       if (!response.ok) throw new Error('Gagal koneksi server');
 
       const blob = await response.blob();
-      
       const writable = await fileHandle.createWritable();
       await writable.write(blob);
       await writable.close();
@@ -340,16 +393,17 @@
       setStatus('✓ Berhasil Ditimpa ke File Asli', 'success');
     } catch (err) {
       console.error(err);
-      setStatus('❌ Gagal menimpa. Pastikan file Word sedang ditutup.', 'error');
+      setStatus('❌ Gagal menimpa. Pastikan file Word sedang tidak dibuka di aplikasi lain.', 'error');
     } finally {
       btnSimpan.innerText = originalText;
     }
   }
 
-  // Download Sebagai File Baru
   async function downloadDocument() {
-    const htmlContent = tinymce.get('editor').getContent();
+    let htmlContent = tinymce.get('editor').getContent();
     if (!htmlContent) return setStatus('❌ Tidak ada konten.', 'error');
+
+    htmlContent = enhanceHtmlForDownload(htmlContent);
 
     const btnDownload = document.querySelector('.btn-success');
     const originalText = btnDownload.innerText;
