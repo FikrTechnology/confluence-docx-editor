@@ -4,32 +4,111 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Solution Analyst - Arsitektur Editor</title>
-  
+
+  <!-- Script TinyMCE -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js"></script>
-  
+  <!-- Script LocalForage (Untuk Cache File Besar / Bypass Limit 5MB) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+
   <style>
-    html, body { margin: 0; padding: 0; height: 100vh; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; }
-    .navbar { background-color: #172b4d; color: white; padding: 12px 24px; z-index: 10; }
+    html, body { 
+      margin: 0; 
+      padding: 0; 
+      height: 100vh; 
+      overflow: hidden; 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      display: flex; 
+      flex-direction: column; 
+    }
+    .navbar { 
+      background-color: #172b4d; 
+      color: white; 
+      padding: 12px 24px; 
+      z-index: 10; 
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
     .navbar h2 { margin: 0; font-size: 18px; font-weight: 600; }
-    .toolbar { background-color: #f4f5f7; padding: 10px 24px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #dfe1e6; }
-    .btn { background-color: #0052cc; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 14px; }
+    
+    .status-badge { 
+      font-size: 13px; 
+      background: #42526e; 
+      padding: 6px 12px; 
+      border-radius: 4px; 
+      font-weight: bold; 
+      transition: all 0.3s;
+    }
+    .status-success { background: #36b37e; color: white; }
+    .status-error { background: #ff5630; color: white; }
+    .status-warning { background: #ffab00; color: #172b4d; }
+    
+    .toolbar { 
+      background-color: #f4f5f7; 
+      padding: 10px 24px; 
+      display: flex; 
+      gap: 12px; 
+      align-items: center; 
+      border-bottom: 1px solid #dfe1e6; 
+      flex-wrap: wrap;
+    }
+    .btn { 
+      background-color: #0052cc; 
+      color: white; 
+      border: none; 
+      padding: 8px 14px; 
+      border-radius: 4px; 
+      cursor: pointer; 
+      font-weight: 600; 
+      font-size: 13px; 
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
     .btn:hover { background-color: #0065ff; }
+    .btn-secondary { background-color: #ff991f; color: #172b4d; }
+    .btn-secondary:hover { background-color: #e2871b; }
     .btn-success { background-color: #36b37e; margin-left: auto; }
     .btn-success:hover { background-color: #2b825c; }
-    input[type="file"] { border: 1px solid #dfe1e6; padding: 6px; border-radius: 4px; background: #fff; font-size: 13px; cursor: pointer; }
-    .editor-wrapper { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .btn-danger { background-color: #ff5630; color: white; }
+    .btn-danger:hover { background-color: #de4420; }
+    
+    .zoom-controls {
+      display: flex;
+      align-items: center;
+      background: #fff;
+      border: 1px solid #dfe1e6;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .zoom-btn { background: #fff; border: none; padding: 6px 10px; cursor: pointer; font-weight: bold; }
+    .zoom-btn:hover { background: #ebecf0; }
+    .zoom-label { padding: 0 8px; font-size: 13px; min-width: 45px; text-align: center; }
+
+    input[type="file"] { display: none; }
+    .editor-wrapper { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; background: #ffffff; }
   </style>
 </head>
 <body>
 
 <div class="navbar">
   <h2>Dokumen Arsitektur Editor</h2>
+  <span id="saveStatus" class="status-badge">Menunggu file...</span>
 </div>
 
 <div class="toolbar">
-  <input type="file" id="fileInput" accept=".docx">
-  <button class="btn" onclick="uploadDocument()">📖 Buka Dokumen</button>
-  <button class="btn btn-success" onclick="downloadDocument()">💾 Download .docx</button>
+  <input type="file" id="fallbackFileInput" accept=".docx" onchange="handleFallbackUpload(event)">
+  <button class="btn" onclick="openDocument()">📖 Buka Dokumen</button>
+  <button class="btn btn-secondary" onclick="saveDirectlyToFile()">💾 Simpan (Timpa File Lokal)</button>
+  <button class="btn btn-danger" onclick="closeDocument()">✖️ Tutup & Clear Cache</button>
+  
+  <div class="zoom-controls">
+    <button class="zoom-btn" onclick="zoomOut()">➖</button>
+    <span class="zoom-label" id="zoomLabel">100%</span>
+    <button class="zoom-btn" onclick="zoomIn()">➕</button>
+  </div>
+
+  <button class="btn btn-success" onclick="downloadDocument()">⬇️ Download File Baru</button>
 </div>
 
 <div class="editor-wrapper">
@@ -37,6 +116,21 @@
 </div>
 
 <script>
+  let currentZoom = 100;
+  let fileHandle = null; 
+
+  function setStatus(message, type = 'success') {
+    const statusEl = document.getElementById('saveStatus');
+    statusEl.innerText = message;
+    statusEl.className = `status-badge status-${type}`;
+  }
+
+  // Set database localforage (Mampu menyimpan file ratusan MB)
+  localforage.config({
+    name: 'DocxEditorCache',
+    storeName: 'draft_data'
+  });
+
   tinymce.init({
     selector: '#editor',
     height: '100%',
@@ -48,7 +142,10 @@
     promotion: false, 
     branding: false,  
     
-    // Fitur Upload Gambar Lokal ke Base64 (Mengatasi isu URL Blob)
+    // Konfigurasi agar tabel lebih mudah di-resize
+    table_column_resizing: 'resizetable',
+    table_resize_bars: true,
+    
     image_title: true,
     automatic_uploads: true,
     file_picker_types: 'image',
@@ -56,13 +153,12 @@
       var input = document.createElement('input');
       input.setAttribute('type', 'file');
       input.setAttribute('accept', 'image/*');
-
       input.onchange = function () {
         var file = this.files[0];
         var reader = new FileReader();
         reader.onload = function () {
           var id = 'blobid' + (new Date()).getTime();
-          var blobCache =  tinymce.activeEditor.editorUpload.blobCache;
+          var blobCache = tinymce.activeEditor.editorUpload.blobCache;
           var base64 = reader.result.split(',')[1];
           var blobInfo = blobCache.create(id, file, base64);
           blobCache.add(blobInfo);
@@ -72,96 +168,217 @@
       };
       input.click();
     },
-    // Memaksa semua gambar (termasuk paste) menjadi Base64 string murni
     images_upload_handler: function (blobInfo, progress) {
-      return new Promise((resolve, reject) => {
-        resolve('data:' + blobInfo.blob().type + ';base64,' + blobInfo.base64());
-      });
+      return new Promise((resolve) => resolve('data:' + blobInfo.blob().type + ';base64,' + blobInfo.base64()));
     },
 
+    // PERBAIKAN CSS Tabel (Mengatasi teks panjang yang mengunci lebar kolom)
     content_style: `
       body { 
-        font-family: Arial, sans-serif; 
+        font-family: 'Segoe UI', Arial, sans-serif; 
         font-size: 14px; 
         line-height: 1.6; 
         margin: 0; 
         padding: 20px; 
         background-color: white; 
+        width: 100%;
+        box-sizing: border-box;
+        transition: transform 0.2s ease-in-out;
+        transform-origin: top left;
       }
-      table { border-collapse: collapse; width: 100%; table-layout: auto; margin-bottom: 15px; } 
-      td, th { border: 1px solid #ccc; padding: 8px; vertical-align: top; word-wrap: break-word; }
+      table { 
+        border-collapse: collapse; 
+        width: 100%; 
+        table-layout: auto; /* Bisa diganti fixed jika ingin rata sempurna, namun auto lebih cocok untuk data dinamis */
+        margin-bottom: 15px; 
+      } 
+      td, th { 
+        border: 1px solid #ccc; 
+        padding: 8px; 
+        vertical-align: top; 
+        word-wrap: break-word; 
+        overflow-wrap: break-word; 
+        word-break: break-all; /* Paksa potong teks yang tidak berspasi */
+        min-width: 30px;
+      }
       img { max-width: 100%; height: auto; display: block; margin: 10px 0; }
     `,
     setup: function (editor) {
       editor.on('init', function () {
         editor.getBody().setAttribute('contenteditable', true);
+        
+        // Load Draf menggunakan LocalForage (IndexedDB untuk file besar)
+        localforage.getItem('docx_editor_draft').then(function(savedDraft) {
+          if (savedDraft && savedDraft.trim() !== '') {
+            editor.setContent(savedDraft);
+            setStatus('✓ Draf Dipulihkan (Ingat: Hubungan file lokal terputus karena refresh)', 'warning');
+          }
+        }).catch(function(err) {
+            console.error('Gagal mengambil cache: ', err);
+        });
+      });
+
+      // Simpan menggunakan LocalForage (Tidak akan Error Quota 5MB)
+      editor.on('keyup change ExecCommand Undo Redo', function () {
+        const content = editor.getContent();
+        localforage.setItem('docx_editor_draft', content).then(function () {
+          setStatus('✓ Tersimpan Sementara (Draf Besar Aman)', 'success');
+        }).catch(function(err) {
+          setStatus('⚠️ Gagal menyimpan ke cache.', 'error');
+        });
       });
     }
   });
 
-  async function uploadDocument() {
-    const fileInput = document.getElementById('fileInput');
-    if (!fileInput.files[0]) return alert('Pilih file .docx terlebih dahulu!');
+  // Fitur Zoom
+  function zoomIn() { if (currentZoom < 200) { currentZoom += 10; applyZoom(); } }
+  function zoomOut() { if (currentZoom > 50) { currentZoom -= 10; applyZoom(); } }
+  function applyZoom() {
+    const body = tinymce.get('editor').getDoc().body;
+    body.style.transform = `scale(${currentZoom / 100})`;
+    body.style.width = `${100 / (currentZoom / 100)}%`; 
+    document.getElementById('zoomLabel').innerText = `${currentZoom}%`;
+  }
 
-    const formData = new FormData();
-    formData.append('document', fileInput.files[0]);
-
+  // Buka Dokumen
+  async function openDocument() {
     try {
-      document.querySelector('.btn').innerText = "⏳ Membuka...";
-      
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        let cleanHtml = data.html
-          .replace(/contenteditable="false"/gi, 'contenteditable="true"')
-          .replace(/readonly/gi, '')
-          .replace(/disabled/gi, '');
-        
-        tinymce.get('editor').setContent(cleanHtml);
+      if (window.showOpenFilePicker) {
+        const [handle] = await window.showOpenFilePicker({
+          types: [{ description: 'Word Documents', accept: { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] } }]
+        });
+        fileHandle = handle;
+        const file = await fileHandle.getFile();
+        await uploadToServer(file);
       } else {
-        alert('Gagal membuka file. Pastikan proses konversi di server berhasil.');
+        document.getElementById('fallbackFileInput').click();
       }
     } catch (err) {
-      alert('Terjadi kesalahan koneksi ke server.');
-    } finally {
-      document.querySelector('.btn').innerText = "📖 Buka Dokumen";
+      console.log('Batal memilih file');
     }
   }
 
-  async function downloadDocument() {
-    const htmlContent = tinymce.get('editor').getContent();
-    if (!htmlContent) return alert('Tidak ada konten untuk diunduh.');
+  function handleFallbackUpload(event) {
+    if (event.target.files[0]) uploadToServer(event.target.files[0]);
+  }
+
+  async function uploadToServer(file) {
+    const formData = new FormData();
+    formData.append('document', file);
+    const btnBuka = document.querySelector('.btn');
+    const originalText = btnBuka.innerText;
 
     try {
-      document.querySelector('.btn-success').innerText = "⏳ Memproses...";
+      btnBuka.innerText = "⏳ Memproses...";
+      setStatus('Sedang mengonversi dokumen...', 'warning');
       
+      const response = await fetch('/api/upload', { method: 'POST', body: formData });
+      if (!response.ok) throw new Error('Gagal koneksi ke server');
+      
+      const data = await response.json();
+      let cleanHtml = data.html
+        .replace(/contenteditable="false"/gi, 'contenteditable="true"')
+        .replace(/readonly/gi, '')
+        .replace(/disabled/gi, '');
+      
+      tinymce.get('editor').setContent(cleanHtml);
+      
+      // Simpan ke Cache Besar
+      localforage.setItem('docx_editor_draft', cleanHtml).catch(function(err) {
+        console.warn('Gagal menyimpan cache baru.');
+      });
+      
+      setStatus('✓ File Berhasil Terbuka', 'success');
+    } catch (err) {
+      console.error(err);
+      setStatus('❌ Gagal membuka file. Cek koneksi server.', 'error');
+    } finally {
+      btnBuka.innerText = originalText;
+    }
+  }
+
+  // Tutup Dokumen & Bersihkan Cache
+  function closeDocument() {
+    if (confirm("Yakin ingin menutup dokumen? Pastikan perubahan sudah Anda simpan atau download.")) {
+      localforage.removeItem('docx_editor_draft').then(function() {
+        tinymce.get('editor').setContent('');
+        fileHandle = null;
+        document.getElementById('fallbackFileInput').value = "";
+        setStatus('Menunggu file...', 'warning');
+      });
+    }
+  }
+
+  // Simpan Timpa File Lokal
+  async function saveDirectlyToFile() {
+    const htmlContent = tinymce.get('editor').getContent();
+    if (!htmlContent) return setStatus('❌ Tidak ada konten untuk disimpan.', 'error');
+    
+    if (!fileHandle) {
+      setStatus('⚠️ Akses file hilang karena refresh. Gunakan Download.', 'error');
+      return downloadDocument();
+    }
+
+    const btnSimpan = document.querySelector('.btn-secondary');
+    const originalText = btnSimpan.innerText;
+    btnSimpan.innerText = "⏳ Menyimpan...";
+
+    try {
       const response = await fetch('/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ htmlContent })
       });
+      if (!response.ok) throw new Error('Gagal koneksi server');
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'Dokumen_Arsitektur_Updated.docx';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      } else {
-        alert('Gagal mengunduh file.');
-      }
+      const blob = await response.blob();
+      
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+
+      setStatus('✓ Berhasil Ditimpa ke File Asli', 'success');
     } catch (err) {
-      alert('Terjadi kesalahan koneksi.');
+      console.error(err);
+      setStatus('❌ Gagal menimpa. Pastikan file Word sedang ditutup.', 'error');
     } finally {
-      document.querySelector('.btn-success').innerText = "💾 Download .docx";
+      btnSimpan.innerText = originalText;
+    }
+  }
+
+  // Download Sebagai File Baru
+  async function downloadDocument() {
+    const htmlContent = tinymce.get('editor').getContent();
+    if (!htmlContent) return setStatus('❌ Tidak ada konten.', 'error');
+
+    const btnDownload = document.querySelector('.btn-success');
+    const originalText = btnDownload.innerText;
+    btnDownload.innerText = "⏳ Memproses...";
+    setStatus('Sedang membuat file Word...', 'warning');
+
+    try {
+      const response = await fetch('/api/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ htmlContent })
+      });
+      if (!response.ok) throw new Error();
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Dokumen_Arsitektur_Update.docx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      
+      setStatus('✓ Berhasil Didownload', 'success');
+    } catch (err) {
+      console.error(err);
+      setStatus('❌ Gagal mengunduh file.', 'error');
+    } finally {
+      btnDownload.innerText = originalText;
     }
   }
 </script>
