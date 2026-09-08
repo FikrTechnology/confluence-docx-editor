@@ -184,6 +184,147 @@ function contentTypeFromPath(filePath) {
     }[extension] || 'application/octet-stream';
 }
 
+function normalizeCssColors(htmlContent) {
+    const normalized = htmlContent.replace(/(color\s*:\s*)rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/gi, (match, prefix, red, green, blue) => {
+        const toHex = value => Number(value).toString(16).padStart(2, '0');
+        return `${prefix}#${toHex(red)}${toHex(green)}${toHex(blue)}`;
+    });
+
+    const tagPattern = /<span\b([^>]*)>|<\/span>/gi;
+    const openColorSpans = [];
+    return normalized.replace(tagPattern, (tag, attributes) => {
+        if (tag.toLowerCase() === '</span>') {
+            return openColorSpans.pop() ? '</font>' : '</span>';
+        }
+
+        const colorMatch = attributes.match(/(?:^|[;\s"'])color\s*:\s*(#[0-9a-f]{3,8}|[a-z]+)/i);
+        if (!colorMatch) {
+            openColorSpans.push(false);
+            return tag;
+        }
+
+        openColorSpans.push(true);
+        return `<font color="${colorMatch[1]}">`;
+    });
+}
+
+function decodeBasicHtmlEntities(value) {
+    return value
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'");
+}
+
+function extractColoredText(htmlContent) {
+    const coloredText = [];
+    const patterns = [
+        /<font\b[^>]*\bcolor=["'](#[0-9a-f]{3,8}|[a-z]+)["'][^>]*>([\s\S]*?)<\/font>/gi,
+        /<([a-z0-9]+)\b[^>]*\bstyle=["'][^"']*\bcolor\s*:\s*(#[0-9a-f]{3,8}|[a-z]+)[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi
+    ];
+
+    patterns.forEach(pattern => {
+        let match;
+        while ((match = pattern.exec(htmlContent))) {
+            const color = pattern === patterns[0] ? match[1] : match[2];
+            const content = pattern === patterns[0] ? match[2] : match[3];
+            const text = decodeBasicHtmlEntities(content.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim());
+            if (text && !coloredText.some(item => item.text === text && item.color === color)) {
+                coloredText.push({ text, color });
+            }
+        }
+    });
+
+    return coloredText;
+}
+
+async function applyHtmlFontColors(docxPath, htmlContent) {
+    const colors = extractColoredText(htmlContent);
+    if (!colors.length) return;
+
+    const zip = await JSZip.loadAsync(await fs.readFile(docxPath));
+    const documentEntry = zip.file('word/document.xml');
+    if (!documentEntry) return;
+
+    let documentXml = await documentEntry.async('string');
+    const xmlEscape = value => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const normalizedColors = colors.map(({ text, color }) => ({
+        text,
+        color: color.length === 4
+            ? color.slice(1).split('').map(digit => digit + digit).join('').toUpperCase()
+            : color.replace('#', '').slice(0, 6).toUpperCase()
+    }));
+
+    documentXml = documentXml.replace(/<w:r\b[^>]*>([\s\S]*?)<\/w:r>/gi, (run, content) => {
+        const textMatch = content.match(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/i);
+        if (!textMatch) return run;
+
+        const plainText = textMatch[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+        const matches = [];
+        normalizedColors.forEach(({ text, color }) => {
+            let fromIndex = 0;
+            while (fromIndex < plainText.length) {
+                const index = plainText.indexOf(text, fromIndex);
+                if (index < 0) break;
+                matches.push({ start: index, end: index + text.length, color });
+                fromIndex = index + text.length;
+            }
+        });
+        if (!matches.length) return run;
+
+        matches.sort((left, right) => left.start - right.start);
+        const segments = [];
+        let cursor = 0;
+        matches.forEach(({ start, end, color }) => {
+            if (start < cursor) return;
+            if (start > cursor) segments.push({ text: plainText.slice(cursor, start), color: null });
+            segments.push({ text: plainText.slice(start, end), color });
+            cursor = end;
+        });
+        if (cursor < plainText.length) segments.push({ text: plainText.slice(cursor), color: null });
+
+        const baseProperties = (content.match(/<w:rPr>[\s\S]*?<\/w:rPr>/i) || [''])[0]
+            .replace(/<w:color\b[^>]*\/>/gi, '');
+        return segments.map(({ text, color }) => {
+            const properties = color ? `<w:rPr><w:color w:val="${color}"/>${baseProperties.replace(/^<w:rPr>|<\/w:rPr>$/gi, '')}</w:rPr>` : baseProperties;
+            return `<w:r>${properties}<w:t xml:space="preserve">${xmlEscape(text)}</w:t></w:r>`;
+        }).join('');
+    });
+
+    zip.file('word/document.xml', documentXml);
+    await fs.writeFile(docxPath, await zip.generateAsync({ type: 'nodebuffer' }));
+}
+
+function materializeEmbeddedImages(htmlContent, mediaDir) {
+    const dataImagePattern = /data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)/gi;
+    let imageIndex = 0;
+
+    return htmlContent.replace(dataImagePattern, (match, mimeType, encodedData) => {
+        const extension = mimeType.split('/')[1].replace('svg+xml', 'svg').replace('jpeg', 'jpg');
+        const sourcePath = path.join(mediaDir, `source_${imageIndex}.${extension}`);
+        const outputPath = path.join(mediaDir, `image_${imageIndex}.${extension}`);
+        imageIndex += 1;
+
+        try {
+            fs.writeFileSync(sourcePath, Buffer.from(encodedData.replace(/\s/g, ''), 'base64'));
+            if (['png', 'jpg', 'gif', 'webp'].includes(extension)) {
+                execFileSync('convert', [sourcePath, '-resize', '1600x1600>', '-strip', outputPath], { stdio: 'ignore' });
+                fs.removeSync(sourcePath);
+            } else {
+                fs.moveSync(sourcePath, outputPath, { overwrite: true });
+            }
+            return `file://${outputPath.replace(/\\/g, '/')}`;
+        } catch (imageErr) {
+            console.error('Embedded image preparation error:', imageErr.message);
+            fs.removeSync(sourcePath);
+            fs.removeSync(outputPath);
+            return match;
+        }
+    });
+}
+
 function runCommand(command, args) {
     return new Promise((resolve, reject) => {
         execFile(command, args, { timeout: 120000 }, (error, stdout, stderr) => {
@@ -223,7 +364,14 @@ function getLibreOfficeCommand() {
 
 async function convertLegacyDocToDocx(inputPath, outputDir) {
     const convertedPath = path.join(outputDir, `${path.basename(inputPath, path.extname(inputPath))}.docx`);
-    await runCommand(getLibreOfficeCommand(), ['--headless', '--convert-to', 'docx', '--outdir', outputDir, inputPath]);
+    const profileDir = path.join(outputDir, `.lo-profile-${Date.now()}`);
+    fs.ensureDirSync(profileDir);
+    const profileUrl = `file:///${profileDir.replace(/\\/g, '/')}`;
+    try {
+        await runCommand(getLibreOfficeCommand(), [`-env:UserInstallation=${profileUrl}`, '--headless', '--norestore', '--nofirststartwizard', '--convert-to', 'docx', '--outdir', outputDir, inputPath]);
+    } finally {
+        fs.removeSync(profileDir);
+    }
     if (!fs.existsSync(convertedPath)) {
         throw new Error('LibreOffice tidak menghasilkan file DOCX.');
     }
@@ -232,7 +380,14 @@ async function convertLegacyDocToDocx(inputPath, outputDir) {
 
 async function convertDocxToLegacyDoc(inputPath, outputDir) {
     const convertedPath = path.join(outputDir, `${path.basename(inputPath, path.extname(inputPath))}.doc`);
-    await runCommand(getLibreOfficeCommand(), ['--headless', '--convert-to', 'doc:"MS Word 97"', '--outdir', outputDir, inputPath]);
+    const profileDir = path.join(outputDir, `.lo-profile-${Date.now()}`);
+    fs.ensureDirSync(profileDir);
+    const profileUrl = `file:///${profileDir.replace(/\\/g, '/')}`;
+    try {
+        await runCommand(getLibreOfficeCommand(), [`-env:UserInstallation=${profileUrl}`, '--headless', '--norestore', '--nofirststartwizard', '--convert-to', 'doc:MS Word 97', '--outdir', outputDir, inputPath]);
+    } finally {
+        fs.removeSync(profileDir);
+    }
     if (!fs.existsSync(convertedPath)) {
         throw new Error('LibreOffice tidak menghasilkan file DOC.');
     }
@@ -337,7 +492,10 @@ app.post('/api/download', (req, res) => {
     fs.ensureDirSync(outputDirectory);
 
     // Enhance table dengan inline CSS style yang explicit untuk border rendering di DOCX
-    let enhancedHtml = htmlContent;
+    let enhancedHtml = normalizeCssColors(htmlContent);
+    const downloadMediaDir = path.join(__dirname, 'uploads', `download_media_${time}`);
+    fs.ensureDirSync(downloadMediaDir);
+    enhancedHtml = materializeEmbeddedImages(enhancedHtml, downloadMediaDir);
     
     // Process semua table
     enhancedHtml = enhancedHtml.replace(/<table([^>]*)>/gi, function(match, attrs) {
@@ -443,6 +601,7 @@ ${enhancedHtml}
         try {
             await runCommand('pandoc', [tempHtmlPath, '-f', 'html', '-t', 'docx', '-o', outputDocxPath]);
             await applyWordTableGrid(outputDocxPath);
+            await applyHtmlFontColors(outputDocxPath, enhancedHtml);
 
             const outputPath = format === 'docx'
                 ? outputDocxPath
@@ -454,13 +613,18 @@ ${enhancedHtml}
                 fs.removeSync(tempHtmlPath);
                 fs.removeSync(outputDocxPath);
                 fs.removeSync(outputDirectory);
+                fs.removeSync(downloadMediaDir);
             });
         } catch (borderErr) {
             console.error('Download conversion error:', borderErr.stderr || borderErr.message);
             fs.removeSync(tempHtmlPath);
             fs.removeSync(outputDocxPath);
             fs.removeSync(outputDirectory);
-            return res.status(500).send('Gagal membuat file DOC/DOCX.');
+            fs.removeSync(downloadMediaDir);
+            const missingLibreOffice = borderErr.message.includes('LibreOffice tidak ditemukan') || borderErr.code === 'ENOENT';
+            return res.status(missingLibreOffice ? 503 : 500).send(missingLibreOffice
+                ? 'Download DOC membutuhkan LibreOffice. Gunakan Docker/Koyeb atau install LibreOffice di komputer lokal.'
+                : 'Gagal membuat file DOC/DOCX.');
         }
     })();
 });
