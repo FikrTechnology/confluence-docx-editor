@@ -52,7 +52,7 @@
 </div>
 
 <div class="toolbar">
-  <input type="file" id="fallbackFileInput" accept=".docx" onchange="handleFallbackUpload(event)">
+  <input type="file" id="fallbackFileInput" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleFallbackUpload(event)">
   <button class="btn" onclick="openDocument()">📖 Buka Dokumen</button>
   <button class="btn btn-secondary" onclick="saveDirectlyToFile()">💾 Simpan (Timpa File Lokal)</button>
   <button class="btn btn-danger" onclick="closeDocument()">✖️ Tutup & Clear Cache</button>
@@ -63,6 +63,10 @@
     <button class="zoom-btn" onclick="zoomIn()">➕</button>
   </div>
 
+  <select id="downloadFormat" aria-label="Format download">
+    <option value="docx">Download DOCX</option>
+    <option value="doc">Download DOC</option>
+  </select>
   <button class="btn btn-success" onclick="downloadDocument()">⬇️ Download File Baru</button>
 </div>
 
@@ -297,7 +301,10 @@
     try {
       if (window.showOpenFilePicker) {
         const [handle] = await window.showOpenFilePicker({
-          types: [{ description: 'Word Documents', accept: { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] } }]
+          types: [{ description: 'Word Documents', accept: {
+            'application/msword': ['.doc'],
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
+          } }]
         });
         fileHandle = handle;
         const file = await fileHandle.getFile();
@@ -381,7 +388,7 @@
       const response = await fetch('/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ htmlContent })
+        body: JSON.stringify({ htmlContent, format: document.getElementById('downloadFormat').value })
       });
       if (!response.ok) throw new Error('Gagal koneksi server');
 
@@ -414,7 +421,7 @@
       const response = await fetch('/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ htmlContent })
+        body: JSON.stringify({ htmlContent, format: document.getElementById('downloadFormat').value })
       });
       if (!response.ok) throw new Error();
 
@@ -422,7 +429,8 @@
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'Dokumen_Arsitektur_Update.docx';
+      const format = document.getElementById('downloadFormat').value;
+      a.download = `Dokumen_Arsitektur_Update.${format}`;
       document.body.appendChild(a);
       a.click();
       a.remove();

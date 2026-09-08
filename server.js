@@ -1,25 +1,12 @@
 const express = require('express');
 const fileUpload = require('express-fileupload');
-const { exec, execSync } = require('child_process');
+const { execFile, execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs-extra');
 const JSZip = require('jszip');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// AUTO-INSTALL DEPENDENCIES (Khusus Linux/Ubuntu server)
-try {
-    execSync('pandoc --version', { stdio: 'ignore' });
-} catch (error) {
-    console.log('⏳ Sedang menginstal dependensi (Pandoc & ImageMagick)...');
-    try {
-        execSync('sudo apt-get update && sudo apt-get install -y pandoc imagemagick', { stdio: 'ignore' });
-        console.log('✅ Dependensi berhasil diinstal!');
-    } catch (installError) {
-        console.error('❌ Gagal menginstal otomatis. Pastikan Pandoc dan Imagemagick tersedia secara manual.');
-    }
-}
 
 app.use(express.static('public'));
 app.use(express.json({ limit: '500mb' })); 
@@ -58,7 +45,7 @@ function processExtractedMedia(mediaDir, htmlContent) {
             if (ext === '.emf' || ext === '.wmf') {
                 const pngPath = filePath.replace(new RegExp(`\\${ext}$`, 'i'), '.png');
                 try {
-                    execSync(`convert "${filePath}" "${pngPath}"`);
+                    execFileSync('convert', [filePath, pngPath]);
                     filePath = pngPath; 
                     ext = '.png';
                 } catch (convertErr) {
@@ -89,6 +76,37 @@ function processExtractedMedia(mediaDir, htmlContent) {
     return htmlContent;
 }
 
+function runCommand(command, args) {
+    return new Promise((resolve, reject) => {
+        execFile(command, args, { timeout: 120000 }, (error, stdout, stderr) => {
+            if (error) {
+                error.stderr = stderr;
+                reject(error);
+                return;
+            }
+            resolve({ stdout, stderr });
+        });
+    });
+}
+
+async function convertLegacyDocToDocx(inputPath, outputDir) {
+    const convertedPath = path.join(outputDir, `${path.basename(inputPath, path.extname(inputPath))}.docx`);
+    await runCommand('soffice', ['--headless', '--convert-to', 'docx', '--outdir', outputDir, inputPath]);
+    if (!fs.existsSync(convertedPath)) {
+        throw new Error('LibreOffice tidak menghasilkan file DOCX.');
+    }
+    return convertedPath;
+}
+
+async function convertDocxToLegacyDoc(inputPath, outputDir) {
+    const convertedPath = path.join(outputDir, `${path.basename(inputPath, path.extname(inputPath))}.doc`);
+    await runCommand('soffice', ['--headless', '--convert-to', 'doc:"MS Word 97"', '--outdir', outputDir, inputPath]);
+    if (!fs.existsSync(convertedPath)) {
+        throw new Error('LibreOffice tidak menghasilkan file DOC.');
+    }
+    return convertedPath;
+}
+
 async function applyWordTableGrid(docxPath) {
     const docxBuffer = await fs.readFile(docxPath);
     const zip = await JSZip.loadAsync(docxBuffer);
@@ -117,13 +135,19 @@ async function applyWordTableGrid(docxPath) {
     await fs.writeFile(docxPath, await zip.generateAsync({ type: 'nodebuffer' }));
 }
 
-// Endpoint Upload DOCX -> HTML
+// Endpoint Upload DOC/DOCX -> HTML
 app.post('/api/upload', (req, res) => {
     if (!req.files || !req.files.document) return res.status(400).send('Tidak ada file yang diunggah.');
 
     const file = req.files.document;
     const time = Date.now();
-    const inputPath = path.join(__dirname, 'uploads', `input_${time}.docx`);
+    const originalExtension = path.extname(file.name).toLowerCase();
+    if (!['.doc', '.docx'].includes(originalExtension)) {
+        return res.status(400).send('Format file harus DOC atau DOCX.');
+    }
+
+    const inputPath = path.join(__dirname, 'uploads', `input_${time}${originalExtension}`);
+    const inputDocxPath = path.join(__dirname, 'uploads', `input_${time}.docx`);
     const outputPath = path.join(__dirname, 'uploads', `output_${time}.html`);
     const mediaDir = path.join(__dirname, 'uploads', `media_${time}`);
 
@@ -132,37 +156,41 @@ app.post('/api/upload', (req, res) => {
     file.mv(inputPath, (err) => {
         if (err) return res.status(500).send('Gagal memindahkan file sementara.');
 
-        exec(`pandoc "${inputPath}" -f docx -t html --extract-media="${mediaDir}" -o "${outputPath}"`, (execErr) => {
-            if (execErr) {
-                console.error('Pandoc Error:', execErr);
-                return res.status(500).send('Gagal konversi dokumen ke HTML.');
-            }
-
+        (async () => {
             try {
+                const docxPath = originalExtension === '.doc'
+                    ? await convertLegacyDocToDocx(inputPath, path.dirname(inputPath))
+                    : inputPath;
+
+                await runCommand('pandoc', [docxPath, '-f', 'docx', '-t', 'html', `--extract-media=${mediaDir}`, '-o', outputPath]);
                 let htmlContent = fs.readFileSync(outputPath, 'utf8');
                 htmlContent = processExtractedMedia(mediaDir, htmlContent);
 
                 res.json({ html: htmlContent });
             } catch (err) {
-                console.error('File Read Error:', err);
-                res.status(500).send('Terjadi kesalahan saat membaca output HTML.');
+                console.error('Upload conversion error:', err.stderr || err.message);
+                res.status(500).send('Gagal mengonversi file DOC/DOCX ke HTML.');
             } finally {
                 fs.removeSync(inputPath);
+                fs.removeSync(inputDocxPath);
                 fs.removeSync(outputPath);
                 fs.removeSync(mediaDir);
             }
-        });
+        })();
     });
 });
 
-// Endpoint Download HTML -> DOCX
+// Endpoint Download HTML -> DOC/DOCX
 app.post('/api/download', (req, res) => {
-    const { htmlContent } = req.body;
+    const { htmlContent, format = 'docx' } = req.body;
     if (!htmlContent) return res.status(400).send('Konten dokumen kosong.');
+    if (!['doc', 'docx'].includes(format)) return res.status(400).send('Format download tidak valid.');
 
     const time = Date.now();
     const tempHtmlPath = path.join(__dirname, 'uploads', `temp_${time}.html`);
     const outputDocxPath = path.join(__dirname, 'uploads', `Document_${time}.docx`);
+    const outputDirectory = path.join(__dirname, 'uploads', `download_${time}`);
+    fs.ensureDirSync(outputDirectory);
 
     // Enhance table dengan inline CSS style yang explicit untuk border rendering di DOCX
     let enhancedHtml = htmlContent;
@@ -267,29 +295,34 @@ ${enhancedHtml}
     
     fs.writeFileSync(tempHtmlPath, fullHtml);
 
-    const pandocCmd = `pandoc "${tempHtmlPath}" -f html -t docx -o "${outputDocxPath}"`;
-
-    exec(pandocCmd, async (execErr) => {
-        if (execErr) {
-            console.error('Pandoc Download Error:', execErr);
-            fs.removeSync(tempHtmlPath);
-            return res.status(500).send('Gagal konversi kembali ke DOCX: ' + execErr.message);
-        }
-
+    (async () => {
         try {
+            await runCommand('pandoc', [tempHtmlPath, '-f', 'html', '-t', 'docx', '-o', outputDocxPath]);
             await applyWordTableGrid(outputDocxPath);
-        } catch (borderErr) {
-            console.error('DOCX Table Grid Error:', borderErr);
-            fs.removeSync(tempHtmlPath);
-            fs.removeSync(outputDocxPath);
-            return res.status(500).send('Gagal menambahkan border Table Grid ke DOCX.');
-        }
 
-        res.download(outputDocxPath, 'Dokumen_Arsitektur_Update.docx', () => {
+            const outputPath = format === 'docx'
+                ? outputDocxPath
+                : await convertDocxToLegacyDoc(outputDocxPath, outputDirectory);
+            const downloadName = `Dokumen_Arsitektur_Update.${format}`;
+
+            res.download(outputPath, downloadName, (downloadErr) => {
+                if (downloadErr) console.error('Download Error:', downloadErr);
+                fs.removeSync(tempHtmlPath);
+                fs.removeSync(outputDocxPath);
+                fs.removeSync(outputDirectory);
+            });
+        } catch (borderErr) {
+            console.error('Download conversion error:', borderErr.stderr || borderErr.message);
             fs.removeSync(tempHtmlPath);
             fs.removeSync(outputDocxPath);
-        });
-    });
+            fs.removeSync(outputDirectory);
+            return res.status(500).send('Gagal membuat file DOC/DOCX.');
+        }
+    })();
 });
 
-app.listen(PORT, () => console.log(`🚀 Server berjalan di port ${PORT}`));
+if (require.main === module) {
+    app.listen(PORT, () => console.log(`Server berjalan di port ${PORT}`));
+}
+
+module.exports = app;
