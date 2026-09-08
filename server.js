@@ -325,6 +325,13 @@ function materializeEmbeddedImages(htmlContent, mediaDir) {
     });
 }
 
+function getReferenceDocxPath() {
+    const configuredPath = process.env.REFERENCE_DOCX;
+    const defaultPath = path.join(__dirname, 'templates_doc', 'R6 - Partner Edit Screen.docx');
+    const referencePath = configuredPath || defaultPath;
+    return fs.existsSync(referencePath) ? referencePath : null;
+}
+
 function runCommand(command, args) {
     return new Promise((resolve, reject) => {
         execFile(command, args, { timeout: 120000 }, (error, stdout, stderr) => {
@@ -590,7 +597,11 @@ ${enhancedHtml}
 
     (async () => {
         try {
-            await runCommand('pandoc', [tempHtmlPath, '-f', 'html', '-t', 'docx', '-o', outputDocxPath]);
+            const pandocArgs = [tempHtmlPath, '-f', 'html', '-t', 'docx'];
+            const referenceDocxPath = getReferenceDocxPath();
+            if (referenceDocxPath) pandocArgs.push(`--reference-doc=${referenceDocxPath}`);
+            pandocArgs.push('-o', outputDocxPath);
+            await runCommand('pandoc', pandocArgs);
             await applyWordTableGrid(outputDocxPath);
             await applyHtmlFontColors(outputDocxPath, enhancedHtml);
 
