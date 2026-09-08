@@ -76,6 +76,93 @@ function processExtractedMedia(mediaDir, htmlContent) {
     return htmlContent;
 }
 
+function decodeQuotedPrintable(value) {
+    return value
+        .replace(/=\r?\n/g, '')
+        .replace(/=([a-f0-9]{2})/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+function parseMimeHeaders(headerText) {
+    const headers = {};
+    headerText.split(/\r?\n/).forEach(line => {
+        const separator = line.indexOf(':');
+        if (separator > 0) {
+            headers[line.slice(0, separator).trim().toLowerCase()] = line.slice(separator + 1).trim();
+        }
+    });
+    return headers;
+}
+
+function extractConfluenceHtmlDoc(inputPath, mediaDir, outputPath) {
+    const raw = fs.readFileSync(inputPath);
+    const text = raw.toString('utf8');
+    const isMimeExport = /multipart\/related/i.test(text) && /<html[\s>]/i.test(text);
+
+    if (!isMimeExport && !/<html[\s>]/i.test(text)) return false;
+
+    let htmlContent = text;
+    if (isMimeExport) {
+        const boundaryMatch = text.match(/boundary\s*=\s*(?:"([^"]+)"|([^;\r\n]+))/i);
+        if (!boundaryMatch) throw new Error('Boundary MIME pada file DOC tidak ditemukan.');
+
+        const boundary = boundaryMatch[1] || boundaryMatch[2];
+        const parts = text.split(`--${boundary}`);
+        const imageReferences = [];
+
+        for (const part of parts) {
+            const separator = part.search(/\r?\n\r?\n/);
+            if (separator < 0) continue;
+
+            const headerText = part.slice(0, separator);
+            const body = part.slice(separator).replace(/^\r?\n\r?\n/, '').replace(/\r?\n--$/, '');
+            const headers = parseMimeHeaders(headerText);
+            const contentType = (headers['content-type'] || '').split(';')[0].toLowerCase();
+            const transferEncoding = (headers['content-transfer-encoding'] || '').toLowerCase();
+
+            if (contentType === 'text/html') {
+                htmlContent = transferEncoding === 'quoted-printable' ? decodeQuotedPrintable(body) : body;
+                continue;
+            }
+
+            if (contentType.startsWith('image/')) {
+                const extension = contentType.split('/')[1].replace('svg+xml', 'svg').replace('jpeg', 'jpg');
+                const imagePath = path.join(mediaDir, `embedded_${imageReferences.length}.${extension}`);
+                const imageBuffer = transferEncoding === 'base64'
+                    ? Buffer.from(body.replace(/\s/g, ''), 'base64')
+                    : Buffer.from(body, 'binary');
+                fs.writeFileSync(imagePath, imageBuffer);
+
+                const contentLocation = headers['content-location'] || '';
+                const contentId = (headers['content-id'] || '').replace(/[<>]/g, '');
+                imageReferences.push({ imagePath, contentLocation, contentId });
+            }
+        }
+
+        imageReferences.forEach(({ imagePath, contentLocation, contentId }) => {
+            const dataUrl = `data:${contentTypeFromPath(imagePath)};base64,${fs.readFileSync(imagePath).toString('base64')}`;
+            const keys = [contentLocation, contentId, path.basename(contentLocation || '')].filter(Boolean);
+            keys.forEach(key => {
+                htmlContent = htmlContent.split(`src="${key}"`).join(`src="${dataUrl}"`);
+                htmlContent = htmlContent.split(`src='${key}'`).join(`src='${dataUrl}'`);
+            });
+        });
+    }
+
+    fs.writeFileSync(outputPath, htmlContent);
+    return true;
+}
+
+function contentTypeFromPath(filePath) {
+    const extension = path.extname(filePath).toLowerCase();
+    return {
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.svg': 'image/svg+xml',
+        '.webp': 'image/webp'
+    }[extension] || 'application/octet-stream';
+}
+
 function runCommand(command, args) {
     return new Promise((resolve, reject) => {
         execFile(command, args, { timeout: 120000 }, (error, stdout, stderr) => {
@@ -172,6 +259,7 @@ app.post('/api/upload', (req, res) => {
 
     const inputPath = path.join(__dirname, 'uploads', `input_${time}${originalExtension}`);
     const inputDocxPath = path.join(__dirname, 'uploads', `input_${time}.docx`);
+    const inputHtmlPath = path.join(__dirname, 'uploads', `input_${time}.html`);
     const outputPath = path.join(__dirname, 'uploads', `output_${time}.html`);
     const mediaDir = path.join(__dirname, 'uploads', `media_${time}`);
 
@@ -182,13 +270,20 @@ app.post('/api/upload', (req, res) => {
 
         (async () => {
             try {
-                const docxPath = originalExtension === '.doc'
-                    ? await convertLegacyDocToDocx(inputPath, path.dirname(inputPath))
-                    : inputPath;
+                const isHtmlBasedDoc = originalExtension === '.doc'
+                    && extractConfluenceHtmlDoc(inputPath, mediaDir, inputHtmlPath);
 
-                await runCommand('pandoc', [docxPath, '-f', 'docx', '-t', 'html', `--extract-media=${mediaDir}`, '-o', outputPath]);
+                if (isHtmlBasedDoc) {
+                    await runCommand('pandoc', [inputHtmlPath, '-f', 'html', '-t', 'html', '-o', outputPath]);
+                } else {
+                    const docxPath = originalExtension === '.doc'
+                        ? await convertLegacyDocToDocx(inputPath, path.dirname(inputPath))
+                        : inputPath;
+                    await runCommand('pandoc', [docxPath, '-f', 'docx', '-t', 'html', `--extract-media=${mediaDir}`, '-o', outputPath]);
+                }
+
                 let htmlContent = fs.readFileSync(outputPath, 'utf8');
-                htmlContent = processExtractedMedia(mediaDir, htmlContent);
+                if (!isHtmlBasedDoc) htmlContent = processExtractedMedia(mediaDir, htmlContent);
 
                 res.json({ html: htmlContent });
             } catch (err) {
@@ -200,6 +295,7 @@ app.post('/api/upload', (req, res) => {
             } finally {
                 fs.removeSync(inputPath);
                 fs.removeSync(inputDocxPath);
+                fs.removeSync(inputHtmlPath);
                 fs.removeSync(outputPath);
                 fs.removeSync(mediaDir);
             }
