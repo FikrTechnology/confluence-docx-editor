@@ -1,6 +1,6 @@
 const express = require('express');
 const fileUpload = require('express-fileupload');
-const { exec } = require('child_process');
+const { exec, execFile, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs-extra');
 const JSZip = require('jszip');
@@ -9,9 +9,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static('public'));
-app.use(express.json({ limit: '500mb' })); 
+app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
-app.use(fileUpload({ limits: { fileSize: 500 * 1024 * 1024 } })); 
+app.use(fileUpload({ limits: { fileSize: 500 * 1024 * 1024 } }));
 
 fs.ensureDirSync(path.join(__dirname, 'uploads'));
 
@@ -145,7 +145,9 @@ app.post('/api/upload', (req, res) => {
 // Endpoint Download HTML -> DOCX
 app.post('/api/download', (req, res) => {
     const { htmlContent } = req.body;
-    if (!htmlContent) return res.status(400).send('Konten dokumen kosong.');
+    if (typeof htmlContent !== 'string' || !htmlContent.trim()) {
+        return res.status(400).send('Konten dokumen kosong.');
+    }
 
     const time = Date.now();
     const tempHtmlPath = path.join(__dirname, 'uploads', `temp_${time}.html`);
@@ -254,13 +256,11 @@ ${enhancedHtml}
     
     fs.writeFileSync(tempHtmlPath, fullHtml);
 
-    const pandocCmd = `pandoc "${tempHtmlPath}" -f html -t docx -o "${outputDocxPath}"`;
-
-    exec(pandocCmd, async (execErr) => {
+    execFile('pandoc', [tempHtmlPath, '-f', 'html', '-t', 'docx', '-o', outputDocxPath], async (execErr, stdout, stderr) => {
         if (execErr) {
-            console.error('Pandoc Download Error:', execErr);
+            console.error('Pandoc Download Error:', stderr || execErr.message);
             fs.removeSync(tempHtmlPath);
-            return res.status(500).send('Gagal konversi kembali ke DOCX: ' + execErr.message);
+            return res.status(500).send('Gagal konversi kembali ke DOCX. Pastikan Pandoc tersedia di server.');
         }
 
         try {
@@ -279,4 +279,8 @@ ${enhancedHtml}
     });
 });
 
-app.listen(PORT, () => console.log(`🚀 Server berjalan di port ${PORT}`));
+if (require.main === module) {
+    app.listen(PORT, () => console.log(`Server berjalan di port ${PORT}`));
+}
+
+module.exports = app;
