@@ -1,6 +1,6 @@
 const express = require('express');
 const fileUpload = require('express-fileupload');
-const { exec, execFile, execSync } = require('child_process');
+const { exec, execFile, execFileSync, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs-extra');
 const JSZip = require('jszip');
