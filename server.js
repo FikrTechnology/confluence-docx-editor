@@ -124,8 +124,14 @@ function extractConfluenceHtmlDoc(inputPath, mediaDir, outputPath) {
                 continue;
             }
 
-            if (contentType.startsWith('image/')) {
-                const extension = contentType.split('/')[1].replace('svg+xml', 'svg').replace('jpeg', 'jpg');
+            const isImageAttachment = contentType.startsWith('image/') || contentType === 'application/octet-stream';
+            if (isImageAttachment) {
+                const contentLocationName = path.basename((headers['content-location'] || '').split('?')[0]);
+                const htmlImageMatch = htmlContent.match(new RegExp(`src=["'][^"']*${contentLocationName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^"']*["'][^>]*data-image-src=["'][^"']+\\.([a-z0-9]+)`, 'i'));
+                const detectedExtension = htmlImageMatch ? htmlImageMatch[1].toLowerCase() : 'png';
+                const extension = contentType.startsWith('image/')
+                    ? contentType.split('/')[1].replace('svg+xml', 'svg').replace('jpeg', 'jpg')
+                    : detectedExtension;
                 const imagePath = path.join(mediaDir, `embedded_${imageReferences.length}.${extension}`);
                 const imageBuffer = transferEncoding === 'base64'
                     ? Buffer.from(body.replace(/\s/g, ''), 'base64')
@@ -138,13 +144,28 @@ function extractConfluenceHtmlDoc(inputPath, mediaDir, outputPath) {
             }
         }
 
-        imageReferences.forEach(({ imagePath, contentLocation, contentId }) => {
-            const dataUrl = `data:${contentTypeFromPath(imagePath)};base64,${fs.readFileSync(imagePath).toString('base64')}`;
+        const dataUrls = imageReferences.map(({ imagePath }) =>
+            `data:${contentTypeFromPath(imagePath)};base64,${fs.readFileSync(imagePath).toString('base64')}`
+        );
+
+        imageReferences.forEach(({ contentLocation, contentId }, imageIndex) => {
+            const dataUrl = dataUrls[imageIndex];
             const keys = [contentLocation, contentId, path.basename(contentLocation || '')].filter(Boolean);
             keys.forEach(key => {
-                htmlContent = htmlContent.split(`src="${key}"`).join(`src="${dataUrl}"`);
-                htmlContent = htmlContent.split(`src='${key}'`).join(`src='${dataUrl}'`);
+                const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                htmlContent = htmlContent.replace(new RegExp(`(src=["'])${escapedKey}(["'])`, 'gi'), `$1${dataUrl}$2`);
             });
+        });
+
+        // Some Confluence exports replace src values with opaque IDs, while the
+        // MIME parts keep local attachment names. Map remaining unique sources
+        // in document order as a fallback for that export variant.
+        let fallbackImageIndex = 0;
+        htmlContent = htmlContent.replace(/(<img\b[^>]*\bsrc=["'])([^"']+)(["'])/gi, (match, prefix, source, suffix) => {
+            if (source.startsWith('data:') || fallbackImageIndex >= dataUrls.length) return match;
+            const dataUrl = dataUrls[fallbackImageIndex];
+            fallbackImageIndex += 1;
+            return `${prefix}${dataUrl}${suffix}`;
         });
     }
 
@@ -274,7 +295,7 @@ app.post('/api/upload', (req, res) => {
                     && extractConfluenceHtmlDoc(inputPath, mediaDir, inputHtmlPath);
 
                 if (isHtmlBasedDoc) {
-                    await runCommand('pandoc', [inputHtmlPath, '-f', 'html', '-t', 'html', '-o', outputPath]);
+                    fs.copyFileSync(inputHtmlPath, outputPath);
                 } else {
                     const docxPath = originalExtension === '.doc'
                         ? await convertLegacyDocToDocx(inputPath, path.dirname(inputPath))

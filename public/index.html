@@ -176,31 +176,20 @@
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = htmlContent;
 
-    // 1. Hapus colgroup yang mengunci lebar kolom terlalu kecil
-    tempDiv.querySelectorAll('colgroup').forEach(cg => cg.remove());
-
-    // 2. Process semua nested table (table dalam table)
+    // 1. Preserve colgroup widths from the source document.
+    // 2. Process all nested tables without flattening their original proportions.
     tempDiv.querySelectorAll('table table').forEach(nestedTable => {
-      // Pastikan nested table punya lebar reasonable
       nestedTable.setAttribute('border', '1');
       nestedTable.setAttribute('cellpadding', '6');
       nestedTable.setAttribute('cellspacing', '0');
       
       let style = nestedTable.getAttribute('style') || '';
-      // Hapus width fixed yang bikin rapat
-      style = style.replace(/width:\s*[0-9.]+\s*(px|%|pt)/gi, '');
-      // Tambah property yang sesuai
       if (!style.includes('border-collapse')) style += '; border-collapse: collapse';
-      if (!style.includes('width:')) style += '; width: 100%';
       if (!style.includes('margin')) style += '; margin: 4px 0';
       nestedTable.setAttribute('style', style.replace(/^\s*;\s*/, '').trim());
 
-      // Process cell dalam nested table
       nestedTable.querySelectorAll('td, th').forEach(cell => {
         let cellStyle = cell.getAttribute('style') || '';
-        // Jangan set width fixed yang bikin kolom rapat
-        cellStyle = cellStyle.replace(/width:\s*[0-9.]+\s*(px|%|pt)/gi, '');
-        // Ensure padding dan border
         if (!cellStyle.includes('padding')) cellStyle += '; padding: 4px 6px';
         if (!cellStyle.includes('border')) cellStyle += '; border: 1px solid #999';
         if (!cellStyle.includes('vertical-align')) cellStyle += '; vertical-align: top';
@@ -208,7 +197,7 @@
       });
     });
 
-    // 3. Process main table juga
+    // 3. Process main tables while preserving their source widths.
     tempDiv.querySelectorAll('table').forEach(table => {
       // Skip jika sudah nested (handled di atas)
       if (table.querySelector('table')) return;
