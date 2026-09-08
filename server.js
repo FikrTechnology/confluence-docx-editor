@@ -89,9 +89,33 @@ function runCommand(command, args) {
     });
 }
 
+function getLibreOfficeCommand() {
+    const configuredPath = process.env.SOFFICE_PATH;
+    const fileCandidates = [
+        configuredPath,
+        process.platform === 'win32' ? path.join(process.env.ProgramFiles || '', 'LibreOffice', 'program', 'soffice.exe') : null,
+        process.platform === 'win32' ? path.join(process.env['ProgramFiles(x86)'] || '', 'LibreOffice', 'program', 'soffice.exe') : null
+    ].filter(Boolean);
+
+    const fileCommand = fileCandidates.find(candidate => fs.existsSync(candidate));
+    if (fileCommand) return fileCommand;
+
+    const lookupCommand = process.platform === 'win32' ? 'where.exe' : 'which';
+    for (const command of ['soffice', 'libreoffice']) {
+        try {
+            execFileSync(lookupCommand, [command], { stdio: 'ignore' });
+            return command;
+        } catch (lookupError) {
+            // Try the next executable name.
+        }
+    }
+
+    throw new Error('LibreOffice tidak ditemukan. Install LibreOffice atau set environment variable SOFFICE_PATH ke lokasi soffice.exe.');
+}
+
 async function convertLegacyDocToDocx(inputPath, outputDir) {
     const convertedPath = path.join(outputDir, `${path.basename(inputPath, path.extname(inputPath))}.docx`);
-    await runCommand('soffice', ['--headless', '--convert-to', 'docx', '--outdir', outputDir, inputPath]);
+    await runCommand(getLibreOfficeCommand(), ['--headless', '--convert-to', 'docx', '--outdir', outputDir, inputPath]);
     if (!fs.existsSync(convertedPath)) {
         throw new Error('LibreOffice tidak menghasilkan file DOCX.');
     }
@@ -100,7 +124,7 @@ async function convertLegacyDocToDocx(inputPath, outputDir) {
 
 async function convertDocxToLegacyDoc(inputPath, outputDir) {
     const convertedPath = path.join(outputDir, `${path.basename(inputPath, path.extname(inputPath))}.doc`);
-    await runCommand('soffice', ['--headless', '--convert-to', 'doc:"MS Word 97"', '--outdir', outputDir, inputPath]);
+    await runCommand(getLibreOfficeCommand(), ['--headless', '--convert-to', 'doc:"MS Word 97"', '--outdir', outputDir, inputPath]);
     if (!fs.existsSync(convertedPath)) {
         throw new Error('LibreOffice tidak menghasilkan file DOC.');
     }
@@ -169,7 +193,10 @@ app.post('/api/upload', (req, res) => {
                 res.json({ html: htmlContent });
             } catch (err) {
                 console.error('Upload conversion error:', err.stderr || err.message);
-                res.status(500).send('Gagal mengonversi file DOC/DOCX ke HTML.');
+                const missingLibreOffice = err.message.includes('LibreOffice tidak ditemukan') || err.code === 'ENOENT';
+                res.status(missingLibreOffice ? 503 : 500).send(missingLibreOffice
+                    ? 'File DOC membutuhkan LibreOffice. Install LibreOffice terlebih dahulu atau jalankan aplikasi melalui Docker.'
+                    : 'Gagal mengonversi file DOC/DOCX ke HTML.');
             } finally {
                 fs.removeSync(inputPath);
                 fs.removeSync(inputDocxPath);
