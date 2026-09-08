@@ -1,25 +1,12 @@
 const express = require('express');
 const fileUpload = require('express-fileupload');
-const { exec, execSync } = require('child_process');
+const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs-extra');
 const JSZip = require('jszip');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// AUTO-INSTALL DEPENDENCIES (Khusus Linux/Ubuntu server)
-try {
-    execSync('pandoc --version', { stdio: 'ignore' });
-} catch (error) {
-    console.log('⏳ Sedang menginstal dependensi (Pandoc & ImageMagick)...');
-    try {
-        execSync('sudo apt-get update && sudo apt-get install -y pandoc imagemagick', { stdio: 'ignore' });
-        console.log('✅ Dependensi berhasil diinstal!');
-    } catch (installError) {
-        console.error('❌ Gagal menginstal otomatis. Pastikan Pandoc dan Imagemagick tersedia secara manual.');
-    }
-}
 
 app.use(express.static('public'));
 app.use(express.json({ limit: '500mb' })); 
