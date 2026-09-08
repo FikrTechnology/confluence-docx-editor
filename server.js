@@ -364,14 +364,7 @@ function getLibreOfficeCommand() {
 
 async function convertLegacyDocToDocx(inputPath, outputDir) {
     const convertedPath = path.join(outputDir, `${path.basename(inputPath, path.extname(inputPath))}.docx`);
-    const profileDir = path.join(outputDir, `.lo-profile-${Date.now()}`);
-    fs.ensureDirSync(profileDir);
-    const profileUrl = `file:///${profileDir.replace(/\\/g, '/')}`;
-    try {
-        await runCommand(getLibreOfficeCommand(), [`-env:UserInstallation=${profileUrl}`, '--headless', '--norestore', '--nofirststartwizard', '--convert-to', 'docx', '--outdir', outputDir, inputPath]);
-    } finally {
-        fs.removeSync(profileDir);
-    }
+    await runCommand(getLibreOfficeCommand(), ['--headless', '--norestore', '--nofirststartwizard', '--convert-to', 'docx', '--outdir', outputDir, inputPath]);
     if (!fs.existsSync(convertedPath)) {
         throw new Error('LibreOffice tidak menghasilkan file DOCX.');
     }
@@ -380,13 +373,11 @@ async function convertLegacyDocToDocx(inputPath, outputDir) {
 
 async function convertDocxToLegacyDoc(inputPath, outputDir) {
     const convertedPath = path.join(outputDir, `${path.basename(inputPath, path.extname(inputPath))}.doc`);
-    const profileDir = path.join(outputDir, `.lo-profile-${Date.now()}`);
-    fs.ensureDirSync(profileDir);
-    const profileUrl = `file:///${profileDir.replace(/\\/g, '/')}`;
-    try {
-        await runCommand(getLibreOfficeCommand(), [`-env:UserInstallation=${profileUrl}`, '--headless', '--norestore', '--nofirststartwizard', '--convert-to', 'doc:MS Word 97', '--outdir', outputDir, inputPath]);
-    } finally {
-        fs.removeSync(profileDir);
+    const command = getLibreOfficeCommand();
+    const commonArgs = ['--headless', '--norestore', '--nofirststartwizard', '--outdir', outputDir, inputPath];
+    await runCommand(command, [...commonArgs.slice(0, 3), '--convert-to', 'doc:MS Word 97', ...commonArgs.slice(3)]);
+    if (!fs.existsSync(convertedPath)) {
+        await runCommand(command, [...commonArgs.slice(0, 3), '--convert-to', 'doc', ...commonArgs.slice(3)]);
     }
     if (!fs.existsSync(convertedPath)) {
         throw new Error('LibreOffice tidak menghasilkan file DOC.');
