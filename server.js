@@ -78,6 +78,36 @@ function processExtractedMedia(mediaDir, htmlContent) {
     return htmlContent;
 }
 
+function materializeEmbeddedImages(htmlContent, mediaDir) {
+    const dataImagePattern = /data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)/gi;
+    let imageIndex = 0;
+
+    return htmlContent.replace(dataImagePattern, (match, mimeType, encodedData) => {
+        const extension = mimeType.split('/')[1].replace('svg+xml', 'svg').replace('jpeg', 'jpg');
+        const sourcePath = path.join(mediaDir, `source_${imageIndex}.${extension}`);
+        const outputPath = path.join(mediaDir, `image_${imageIndex}.${extension}`);
+        imageIndex += 1;
+
+        try {
+            fs.writeFileSync(sourcePath, Buffer.from(encodedData.replace(/\s/g, ''), 'base64'));
+
+            if (['png', 'jpg', 'gif', 'webp'].includes(extension)) {
+                execFileSync('convert', [sourcePath, '-resize', '1600x1600>', '-strip', outputPath], { stdio: 'ignore' });
+                fs.removeSync(sourcePath);
+            } else {
+                fs.moveSync(sourcePath, outputPath, { overwrite: true });
+            }
+
+            return `file://${outputPath.replace(/\\/g, '/')}`;
+        } catch (imageErr) {
+            console.error('Embedded image preparation error:', imageErr.message);
+            fs.removeSync(sourcePath);
+            fs.removeSync(outputPath);
+            return match;
+        }
+    });
+}
+
 async function applyWordTableGrid(docxPath) {
     const docxBuffer = await fs.readFile(docxPath);
     const zip = await JSZip.loadAsync(docxBuffer);
@@ -165,9 +195,12 @@ app.post('/api/download', (req, res) => {
     const time = Date.now();
     const tempHtmlPath = path.join(__dirname, 'uploads', `temp_${time}.html`);
     const outputDocxPath = path.join(__dirname, 'uploads', `Document_${time}.docx`);
+    const mediaDir = path.join(__dirname, 'uploads', `download_media_${time}`);
+    fs.ensureDirSync(mediaDir);
 
     // Enhance table dengan inline CSS style yang explicit untuk border rendering di DOCX
     let enhancedHtml = htmlContent;
+    enhancedHtml = materializeEmbeddedImages(enhancedHtml, mediaDir);
     
     // Process semua table
     enhancedHtml = enhancedHtml.replace(/<table([^>]*)>/gi, function(match, attrs) {
@@ -271,6 +304,7 @@ ${enhancedHtml}
         fs.writeFileSync(tempHtmlPath, fullHtml);
     } catch (writeErr) {
         downloadInProgress = false;
+        fs.removeSync(mediaDir);
         console.error('DOCX Temporary File Error:', writeErr);
         return res.status(500).send('Gagal menyiapkan file sementara.');
     }
@@ -285,6 +319,7 @@ ${enhancedHtml}
             });
             fs.removeSync(tempHtmlPath);
             fs.removeSync(outputDocxPath);
+            fs.removeSync(mediaDir);
             downloadInProgress = false;
             return res.status(500).send('Gagal konversi kembali ke DOCX. Pastikan Pandoc tersedia di server.');
         }
@@ -295,6 +330,7 @@ ${enhancedHtml}
             console.error('DOCX Table Grid Error:', borderErr);
             fs.removeSync(tempHtmlPath);
             fs.removeSync(outputDocxPath);
+            fs.removeSync(mediaDir);
             downloadInProgress = false;
             return res.status(500).send('Gagal menambahkan border Table Grid ke DOCX.');
         }
@@ -304,6 +340,7 @@ ${enhancedHtml}
             if (downloadErr) console.error('DOCX Download Error:', downloadErr);
             fs.removeSync(tempHtmlPath);
             fs.removeSync(outputDocxPath);
+            fs.removeSync(mediaDir);
             downloadInProgress = false;
         });
     });
