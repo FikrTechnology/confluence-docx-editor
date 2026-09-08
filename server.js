@@ -7,6 +7,8 @@ const JSZip = require('jszip');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const MAX_DOWNLOAD_HTML_BYTES = 12 * 1024 * 1024;
+let downloadInProgress = false;
 
 app.use(express.static('public'));
 app.use(express.json({ limit: '500mb' }));
@@ -149,6 +151,17 @@ app.post('/api/download', (req, res) => {
         return res.status(400).send('Konten dokumen kosong.');
     }
 
+    if (Buffer.byteLength(htmlContent, 'utf8') > MAX_DOWNLOAD_HTML_BYTES) {
+        return res.status(413).send('Dokumen terlalu besar untuk instance gratis. Kurangi ukuran gambar atau isi dokumen.');
+    }
+
+    if (downloadInProgress) {
+        return res.status(503).send('Server sedang memproses dokumen lain. Coba lagi setelah beberapa saat.');
+    }
+
+    downloadInProgress = true;
+    const startedAt = Date.now();
+
     const time = Date.now();
     const tempHtmlPath = path.join(__dirname, 'uploads', `temp_${time}.html`);
     const outputDocxPath = path.join(__dirname, 'uploads', `Document_${time}.docx`);
@@ -254,12 +267,25 @@ ${enhancedHtml}
 </body>
 </html>`;
     
-    fs.writeFileSync(tempHtmlPath, fullHtml);
+    try {
+        fs.writeFileSync(tempHtmlPath, fullHtml);
+    } catch (writeErr) {
+        downloadInProgress = false;
+        console.error('DOCX Temporary File Error:', writeErr);
+        return res.status(500).send('Gagal menyiapkan file sementara.');
+    }
 
-    execFile('pandoc', [tempHtmlPath, '-f', 'html', '-t', 'docx', '-o', outputDocxPath], async (execErr, stdout, stderr) => {
+    execFile('pandoc', [tempHtmlPath, '-f', 'html', '-t', 'docx', '-o', outputDocxPath], { timeout: 45000 }, async (execErr, stdout, stderr) => {
         if (execErr) {
-            console.error('Pandoc Download Error:', stderr || execErr.message);
+            console.error('Pandoc Download Error:', {
+                message: execErr.message,
+                code: execErr.code,
+                signal: execErr.signal,
+                stderr: stderr || ''
+            });
             fs.removeSync(tempHtmlPath);
+            fs.removeSync(outputDocxPath);
+            downloadInProgress = false;
             return res.status(500).send('Gagal konversi kembali ke DOCX. Pastikan Pandoc tersedia di server.');
         }
 
@@ -269,12 +295,16 @@ ${enhancedHtml}
             console.error('DOCX Table Grid Error:', borderErr);
             fs.removeSync(tempHtmlPath);
             fs.removeSync(outputDocxPath);
+            downloadInProgress = false;
             return res.status(500).send('Gagal menambahkan border Table Grid ke DOCX.');
         }
 
-        res.download(outputDocxPath, 'Dokumen_Arsitektur_Update.docx', () => {
+        console.log(`DOCX conversion completed in ${Date.now() - startedAt}ms; memory=${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`);
+        res.download(outputDocxPath, 'Dokumen_Arsitektur_Update.docx', (downloadErr) => {
+            if (downloadErr) console.error('DOCX Download Error:', downloadErr);
             fs.removeSync(tempHtmlPath);
             fs.removeSync(outputDocxPath);
+            downloadInProgress = false;
         });
     });
 });
