@@ -7,6 +7,7 @@
 
   <!-- TinyMCE CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/plantuml-encoder@1.4.0/dist/plantuml-encoder.min.js"></script>
   <!-- LocalForage CDN (Cache penyimpanan draf besar) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
@@ -42,6 +43,31 @@
 
     input[type="file"] { display: none; }
     .editor-wrapper { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; background: #ffffff; }
+    .code-block {
+      margin: 12px 0; border: 1px solid #dfe1e6; border-radius: 6px; background: #f7f8fa; color: #111827; padding: 12px 14px; white-space: pre-wrap; font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; line-height: 1.5; overflow-x: auto;
+    }
+    .plantuml-preview {
+      margin: 12px 0; border: 1px solid #dfe1e6; border-radius: 6px; padding: 12px; background: #ffffff;
+    }
+    .plantuml-preview img {
+      max-width: 100%; border: 0; display: block; margin: 0 auto;
+    }
+    .block-selector {
+      padding: 7px 10px; border: 1px solid #dfe1e6; border-radius: 4px; background: #fff; color: #172b4d; font-size: 12px;
+    }
+    .plantuml-preview { cursor: pointer; }
+    .plantuml-preview svg { max-width: 100%; height: auto; }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-card { width: 960px; max-width: 95vw; max-height: 90vh; background: #1e1e1e; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #111827; color: #e5e7eb; font-weight: 600; font-size: 14px; }
+    .modal-close { background: none; border: none; color: #e5e7eb; cursor: pointer; font-size: 16px; }
+    .modal-body { display: flex; flex: 1; min-height: 420px; }
+    .plantuml-textarea { flex: 1; background: #1e1e1e; color: #d4d4d4; border: none; border-right: 1px solid #2d2d2d; padding: 16px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; line-height: 1.6; resize: none; outline: none; }
+    .plantuml-preview-pane { flex: 1; background: #ffffff; padding: 16px; overflow: auto; display: flex; align-items: center; justify-content: center; }
+    .plantuml-preview-pane svg { max-width: 100%; }
+    .plantuml-preview-placeholder { color: #9ca3af; font-size: 13px; text-align: center; }
+    .modal-footer { display: flex; gap: 10px; justify-content: flex-end; padding: 12px 16px; background: #111827; }
   </style>
 </head>
 <body>
@@ -52,7 +78,8 @@
 </div>
 
 <div class="toolbar">
-  <input type="file" id="fallbackFileInput" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleFallbackUpload(event)">
+  <!-- DOC upload sementara di-hide karena hasil konversinya masih berantakan; hanya DOCX yang diterima untuk saat ini. -->
+  <input type="file" id="fallbackFileInput" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleFallbackUpload(event)">
   <button class="btn" onclick="openDocument()">📖 Buka Dokumen</button>
   <button class="btn btn-secondary" onclick="saveDirectlyToFile()">💾 Simpan (Timpa File Lokal)</button>
   <button class="btn btn-danger" onclick="closeDocument()">✖️ Tutup & Clear Cache</button>
@@ -63,9 +90,19 @@
     <button class="zoom-btn" onclick="zoomIn()">➕</button>
   </div>
 
-  <select id="downloadFormat" aria-label="Format download">
+  <select id="blockType" class="block-selector" aria-label="Tipe blok">
+    <option value="paragraph">Paragraph</option>
+    <option value="code">Code</option>
+    <option value="json">JSON</option>
+    <option value="plantuml">PlantUML</option>
+  </select>
+  <button class="btn btn-secondary" onclick="insertCodeBlockFromSelector()">Insert Block</button>
+
+  <select id="downloadFormat" aria-label="Format download" style="display:none;">
     <option value="docx">Download DOCX</option>
+    <!-- Download DOC sementara di-hide karena hasil konversinya masih berantakan.
     <option value="doc">Download DOC</option>
+    -->
   </select>
   <button class="btn btn-success" onclick="downloadDocument()">⬇️ Download File Baru</button>
 </div>
@@ -74,9 +111,30 @@
   <textarea id="editor"></textarea>
 </div>
 
+<div id="plantumlModalOverlay" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <span>PlantUML Editor</span>
+      <button class="modal-close" onclick="closePlantUmlModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <textarea id="plantumlSource" class="plantuml-textarea" spellcheck="false" placeholder="Tempel kode PlantUML (.wsd) di sini..."></textarea>
+      <div class="plantuml-preview-pane" id="plantumlPreviewPane">
+        <span class="plantuml-preview-placeholder">Klik "Preview" untuk melihat diagram</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="previewPlantUmlInModal()">▶ Preview</button>
+      <button class="btn btn-success" onclick="confirmInsertPlantUml()">✔ Sisipkan ke Dokumen</button>
+      <button class="btn btn-danger" onclick="closePlantUmlModal()">Batal</button>
+    </div>
+  </div>
+</div>
+
 <script>
   let currentZoom = 100;
   let fileHandle = null; 
+  let currentFileBaseName = 'Dokumen_Arsitektur_Update';
 
   function setStatus(message, type = 'success') {
     const statusEl = document.getElementById('saveStatus');
@@ -104,6 +162,8 @@
     image_title: true,
     automatic_uploads: true,
     file_picker_types: 'image',
+    extended_valid_elements: 'svg[*],path[*],g[*],rect[*],circle[*],ellipse[*],text[*],tspan[*],line[*],polygon[*],polyline[*],defs[*],marker[*],image[*]',
+    custom_elements: 'svg,path,g,defs,marker,tspan',
     
     file_picker_callback: function (cb, value, meta) {
       var input = document.createElement('input');
@@ -131,8 +191,10 @@
     content_style: `
       body { font-family: 'Segoe UI', Calibri, Arial, sans-serif; font-size: 14px; line-height: 1.6; margin: 0; padding: 25px; background-color: #ffffff; color: #000000; box-sizing: border-box; transition: transform 0.2s ease-in-out; transform-origin: top left; }
       table { border-collapse: collapse; width: 100%; margin: 15px 0; border: 1px solid #000000; }
-      td, th { border: 1px solid #000000; padding: 8px; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; word-break: break-word; }
+      td, th { border: 1px solid #000000; padding: 8px; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; word-break: normal; }
       th { font-weight: bold; background-color: #f2f2f2; }
+      table table { table-layout: auto; }
+      table table td, table table th { min-width: 60px; }
       img { max-width: 100%; height: auto; display: block; margin: 10px 0; }
       p { margin-top: 0; margin-bottom: 0.8em; }
     `,
@@ -158,6 +220,11 @@
           setStatus('⚠️ Gagal menyimpan ke cache.', 'error');
         });
       });
+
+      editor.on('dblclick', function (event) {
+        const block = event.target.closest && event.target.closest('.plantuml-preview');
+        if (block) openPlantUmlModal(block);
+      });
     }
   });
 
@@ -171,28 +238,49 @@
     document.getElementById('zoomLabel').innerText = `${currentZoom}%`;
   }
 
+  function normalizeTextEntities(value) {
+    return value
+      .replace(/&amp;#39;|&amp;#039;|&#39;|&#039;|&#x27;|&apos;/gi, "'")
+      .replace(/&quot;/gi, '"')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&#x2019;|&#8217;|&rsquo;/gi, "'")
+      .replace(/&#x2018;|&#8216;|&lsquo;/gi, "'")
+      .replace(/&mdash;/gi, '—')
+      .replace(/&ndash;/gi, '–');
+  }
+
   // Normalize incoming HTML untuk mencegah nested table terlalu rapat
   function normalizeNestedTableLayout(htmlContent) {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = htmlContent;
 
-    // 1. Preserve colgroup widths from the source document.
-    // 2. Process all nested tables without flattening their original proportions.
+    // Confluence exports fixed colgroup widths that squeeze nested tables until
+    // every word wraps one letter per line. Strip those fixed widths so the
+    // browser can size nested columns based on their actual content.
     tempDiv.querySelectorAll('table table').forEach(nestedTable => {
+      Array.from(nestedTable.children).forEach(child => {
+        if (child.tagName === 'COLGROUP') child.remove();
+      });
+
       nestedTable.setAttribute('border', '1');
       nestedTable.setAttribute('cellpadding', '6');
       nestedTable.setAttribute('cellspacing', '0');
       
       let style = nestedTable.getAttribute('style') || '';
+      style = style.replace(/table-layout\s*:\s*[^;]+;?/gi, '');
       if (!style.includes('border-collapse')) style += '; border-collapse: collapse';
       if (!style.includes('margin')) style += '; margin: 4px 0';
+      style += '; table-layout: auto';
       nestedTable.setAttribute('style', style.replace(/^\s*;\s*/, '').trim());
 
       nestedTable.querySelectorAll('td, th').forEach(cell => {
+        cell.removeAttribute('width');
         let cellStyle = cell.getAttribute('style') || '';
+        cellStyle = cellStyle.replace(/width\s*:\s*[^;]+;?/gi, '');
         if (!cellStyle.includes('padding')) cellStyle += '; padding: 4px 6px';
         if (!cellStyle.includes('border')) cellStyle += '; border: 1px solid #999';
         if (!cellStyle.includes('vertical-align')) cellStyle += '; vertical-align: top';
+        cellStyle += '; min-width: 60px';
         cell.setAttribute('style', cellStyle.replace(/^\s*;\s*/, '').trim());
       });
     });
@@ -215,11 +303,32 @@
     return tempDiv.innerHTML;
   }
 
+  async function ensurePlantUmlImage(container) {
+    if (!container || !container.getAttribute('data-plantuml')) return;
+    const source = container.getAttribute('data-plantuml');
+    try {
+      const encoded = encodeURIComponent(window.plantumlEncoder.encode(source));
+      const response = await fetch(`https://www.plantuml.com/plantuml/svg/${encoded}`);
+      const svgText = await response.text();
+      const dataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
+      const img = document.createElement('img');
+      img.src = dataUri;
+      img.alt = 'PlantUML preview';
+      container.innerHTML = '';
+      container.appendChild(img);
+    } catch (error) {
+      container.innerHTML = '<pre class="code-block">PlantUML preview failed to load.</pre>';
+    }
+  }
+
   // MENYESUAIKAN HTML DENGAN INLINE STYLE AGAR PANDOC MEMBACA STRUKTUR SECARA 1:1
-  function enhanceHtmlForDownload(htmlContent) {
+  async function enhanceHtmlForDownload(htmlContent) {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = htmlContent;
     
+    const plantUmlNodes = Array.from(tempDiv.querySelectorAll('.plantuml-preview'));
+    await Promise.all(plantUmlNodes.map(node => ensurePlantUmlImage(node)));
+
     // 1. Format Tabel & Cell secara presisi
     tempDiv.querySelectorAll('table').forEach(table => {
       table.setAttribute('border', '1');
@@ -233,6 +342,7 @@
         cell.style.border = '1px solid #000000';
         cell.style.padding = '6px 8px';
         cell.style.verticalAlign = 'top';
+        if (!cell.style.color) cell.style.color = '#000000';
         
         if (cell.tagName.toLowerCase() === 'th') {
           cell.style.fontWeight = 'bold';
@@ -265,11 +375,12 @@
       p.style.fontSize = "11pt";
       p.style.lineHeight = "1.5";
       p.style.marginBottom = "8pt";
+      if (!p.style.color) p.style.color = '#000000';
     });
 
     tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => {
       h.style.fontFamily = "'Segoe UI', Arial, sans-serif";
-      h.style.color = "#111111";
+      if (!h.style.color) h.style.color = '#111111';
       h.style.marginTop = "12pt";
       h.style.marginBottom = "4pt";
     });
@@ -291,7 +402,7 @@
       if (window.showOpenFilePicker) {
         const [handle] = await window.showOpenFilePicker({
           types: [{ description: 'Word Documents', accept: {
-            'application/msword': ['.doc'],
+            /* DOC sementara di-hide, lihat komentar di toolbar */
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
           } }]
         });
@@ -311,6 +422,7 @@
   }
 
   async function uploadToServer(file) {
+    currentFileBaseName = file.name.replace(/\.(docx|doc)$/i, '') || currentFileBaseName;
     const formData = new FormData();
     formData.append('document', file);
     const btnBuka = document.querySelector('.btn');
@@ -328,6 +440,7 @@
         .replace(/contenteditable="false"/gi, 'contenteditable="true"')
         .replace(/readonly/gi, '')
         .replace(/disabled/gi, '');
+      cleanHtml = normalizeTextEntities(cleanHtml);
       
       // Normalize nested table layout sebelum load ke editor
       cleanHtml = normalizeNestedTableLayout(cleanHtml);
@@ -358,6 +471,90 @@
     }
   }
 
+  function escapeHtml(value) {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\"/g, '&quot;');
+  }
+
+  async function insertCodeBlockFromSelector() {
+    const editor = tinymce.get('editor');
+    const type = document.getElementById('blockType').value;
+
+    if (type === 'plantuml') {
+      openPlantUmlModal(null);
+      return;
+    }
+
+    const selectedText = editor.selection.getContent({ format: 'text' }) || '';
+    const templateText = type === 'json'
+      ? '{\n  "name": "example",\n  "status": "ok"\n}'
+      : 'const value = "example";\nconsole.log(value);';
+    const content = selectedText || templateText;
+    const escaped = escapeHtml(content);
+    const block = `<pre class="code-block" data-language="${type}">${escaped}</pre>`;
+    editor.insertContent(block);
+  }
+
+  let plantUmlEditingContainer = null;
+
+  function openPlantUmlModal(existingContainer) {
+    plantUmlEditingContainer = existingContainer || null;
+    const source = existingContainer ? (existingContainer.getAttribute('data-plantuml') || '') : '@startuml\nAlice -> Bob: hello\n@enduml';
+    document.getElementById('plantumlSource').value = source;
+    const pane = document.getElementById('plantumlPreviewPane');
+    pane.innerHTML = '<span class="plantuml-preview-placeholder">Klik "Preview" untuk melihat diagram</span>';
+    document.getElementById('plantumlModalOverlay').style.display = 'flex';
+    if (source && source.trim()) previewPlantUmlInModal();
+  }
+
+  function closePlantUmlModal() {
+    document.getElementById('plantumlModalOverlay').style.display = 'none';
+    plantUmlEditingContainer = null;
+  }
+
+  async function previewPlantUmlInModal() {
+    const source = document.getElementById('plantumlSource').value;
+    const pane = document.getElementById('plantumlPreviewPane');
+    if (!source.trim()) {
+      pane.innerHTML = '<span class="plantuml-preview-placeholder">Masukkan kode PlantUML terlebih dahulu.</span>';
+      return;
+    }
+    pane.innerHTML = '<span class="plantuml-preview-placeholder">Membuat preview...</span>';
+    try {
+      const encoded = encodeURIComponent(window.plantumlEncoder.encode(source));
+      const response = await fetch(`https://www.plantuml.com/plantuml/svg/${encoded}`);
+      if (!response.ok) throw new Error('Gagal memuat diagram');
+      const svgText = await response.text();
+      pane.innerHTML = svgText;
+    } catch (error) {
+      pane.innerHTML = '<span class="plantuml-preview-placeholder">Gagal membuat preview. Cek koneksi internet / sintaks PlantUML.</span>';
+    }
+  }
+
+  function confirmInsertPlantUml() {
+    const editor = tinymce.get('editor');
+    const source = document.getElementById('plantumlSource').value;
+    if (!source.trim()) { closePlantUmlModal(); return; }
+
+    const pane = document.getElementById('plantumlPreviewPane');
+    const svgMarkup = pane.querySelector('svg') ? pane.innerHTML : '<span class="plantuml-preview-placeholder">Klik dua kali untuk membuat preview ulang.</span>';
+
+    if (plantUmlEditingContainer) {
+      // setAttribute() stores the string as-is (no HTML parsing), so the raw source must not be pre-escaped here.
+      plantUmlEditingContainer.setAttribute('data-plantuml', source);
+      plantUmlEditingContainer.innerHTML = svgMarkup;
+    } else {
+      const encodedSource = escapeHtml(source);
+      const previewMarkup = `<div class="plantuml-preview" data-plantuml="${encodedSource}" contenteditable="false">${svgMarkup}</div><p>&nbsp;</p>`;
+      editor.insertContent(previewMarkup);
+    }
+
+    closePlantUmlModal();
+  }
+
   async function saveDirectlyToFile() {
     let htmlContent = tinymce.get('editor').getContent();
     if (!htmlContent) return setStatus('❌ Tidak ada konten untuk disimpan.', 'error');
@@ -367,7 +564,7 @@
       return downloadDocument();
     }
 
-    htmlContent = enhanceHtmlForDownload(htmlContent);
+    htmlContent = await enhanceHtmlForDownload(htmlContent);
 
     const btnSimpan = document.querySelector('.btn-secondary');
     const originalText = btnSimpan.innerText;
@@ -377,7 +574,7 @@
       const response = await fetch('/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ htmlContent, format: document.getElementById('downloadFormat').value })
+        body: JSON.stringify({ htmlContent, format: document.getElementById('downloadFormat').value, fileName: currentFileBaseName })
       });
       if (!response.ok) throw new Error('Gagal koneksi server');
 
@@ -399,7 +596,7 @@
     let htmlContent = tinymce.get('editor').getContent();
     if (!htmlContent) return setStatus('❌ Tidak ada konten.', 'error');
 
-    htmlContent = enhanceHtmlForDownload(htmlContent);
+    htmlContent = await enhanceHtmlForDownload(htmlContent);
 
     const btnDownload = document.querySelector('.btn-success');
     const originalText = btnDownload.innerText;
@@ -407,10 +604,11 @@
     setStatus('Sedang membuat file Word...', 'warning');
 
     try {
+      const format = document.getElementById('downloadFormat').value;
       const response = await fetch('/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ htmlContent, format: document.getElementById('downloadFormat').value })
+        body: JSON.stringify({ htmlContent, format, fileName: currentFileBaseName })
       });
       if (!response.ok) throw new Error();
 
@@ -418,8 +616,7 @@
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const format = document.getElementById('downloadFormat').value;
-      a.download = `Dokumen_Arsitektur_Update.${format}`;
+      a.download = `${currentFileBaseName}.${format}`;
       document.body.appendChild(a);
       a.click();
       a.remove();

@@ -420,6 +420,95 @@ async function applyWordTableGrid(docxPath) {
     await fs.writeFile(docxPath, await zip.generateAsync({ type: 'nodebuffer' }));
 }
 
+async function ensureTableGridStyle(docxPath) {
+    const zip = await JSZip.loadAsync(await fs.readFile(docxPath));
+    const stylesEntry = zip.file('word/styles.xml');
+    if (!stylesEntry) return;
+
+    let stylesXml = await stylesEntry.async('string');
+    if (/w:styleId="TableGrid"/.test(stylesXml)) return;
+
+    // LibreOffice's DOC export drops table borders/spacing when the referenced
+    // table style is missing, so define "TableGrid" explicitly if absent.
+    const tableGridStyle = '<w:style w:type="table" w:styleId="TableGrid"><w:name w:val="Table Grid"/><w:uiPriority w:val="39"/><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tblBorders></w:tblPr></w:style>';
+    stylesXml = stylesXml.replace('</w:styles>', `${tableGridStyle}</w:styles>`);
+
+    zip.file('word/styles.xml', stylesXml);
+    await fs.writeFile(docxPath, await zip.generateAsync({ type: 'nodebuffer' }));
+}
+
+function isNearWhiteHex(hex) {
+    if (!hex || hex.length !== 6) return false;
+    const channels = [hex.slice(0, 2), hex.slice(2, 4), hex.slice(4, 6)].map(part => parseInt(part, 16));
+    return channels.every(channel => channel >= 0xF0);
+}
+
+// Keep source black text intact. The previous pass removed all near-white Word colors,
+    // which could erase valid black text when a header row was intentionally dark on light.
+
+function normalizeCellColorToHex(value) {
+    if (!value) return null;
+    const trimmed = value.trim().toLowerCase();
+    if (trimmed.startsWith('#')) {
+        let hex = trimmed.slice(1);
+        if (hex.length === 3) hex = hex.split('').map(digit => digit + digit).join('');
+        return hex.slice(0, 6).toUpperCase();
+    }
+    const namedColors = { white: 'FFFFFF', black: '000000' };
+    return namedColors[trimmed] || null;
+}
+
+function extractCellBackgrounds(htmlContent) {
+    const backgrounds = [];
+    const cellPattern = /<(td|th)\b([^>]*)>/gi;
+    let match;
+    while ((match = cellPattern.exec(htmlContent))) {
+        const styleMatch = match[2].match(/style=["']([^"']*)["']/i);
+        const style = styleMatch ? styleMatch[1] : '';
+        const backgroundMatch = style.match(/background-color\s*:\s*(#[0-9a-f]{3,8}|[a-z]+)/i);
+        backgrounds.push(backgroundMatch ? normalizeCellColorToHex(backgroundMatch[1]) : null);
+    }
+    return backgrounds;
+}
+
+// Table cell shading isn't produced by Pandoc from CSS alone, so re-apply each
+// cell's background-color directly onto the matching Word table cell (by position).
+async function applyCellBackgrounds(docxPath, htmlContent) {
+    const backgrounds = extractCellBackgrounds(htmlContent);
+    if (!backgrounds.some(Boolean)) return;
+
+    const zip = await JSZip.loadAsync(await fs.readFile(docxPath));
+    const documentEntry = zip.file('word/document.xml');
+    if (!documentEntry) return;
+
+    let documentXml = await documentEntry.async('string');
+    let cellIndex = 0;
+    documentXml = documentXml.replace(/<w:tc>(<w:tcPr>[\s\S]*?<\/w:tcPr>)?/g, (match, tcPrBlock) => {
+        const backgroundHex = backgrounds[cellIndex];
+        cellIndex += 1;
+        if (!backgroundHex) return match;
+
+        const existingProperties = tcPrBlock
+            ? tcPrBlock.replace(/^<w:tcPr>|<\/w:tcPr>$/g, '').replace(/<w:shd[^>]*\/>/g, '')
+            : '';
+        return `<w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${backgroundHex}"/>${existingProperties}</w:tcPr>`;
+    });
+
+    zip.file('word/document.xml', documentXml);
+    await fs.writeFile(docxPath, await zip.generateAsync({ type: 'nodebuffer' }));
+}
+
+// Confluence/TinyMCE occasionally leave literal entity text (e.g. "&#39;") in the
+// markup instead of a real character; decode the common punctuation entities only,
+// leaving &lt;/&gt;/&amp; untouched so intentionally escaped code samples still work.
+function decodeTypographicEntities(htmlContent) {
+    return htmlContent
+        .replace(/&#0*39;|&#x0*27;|&apos;|&rsquo;|&lsquo;/gi, "'")
+        .replace(/&mdash;/gi, '\u2014')
+        .replace(/&ndash;/gi, '\u2013')
+        .replace(/&hellip;/gi, '\u2026');
+}
+
 // Endpoint Upload DOC/DOCX -> HTML
 app.post('/api/upload', (req, res) => {
     if (!req.files || !req.files.document) return res.status(400).send('Tidak ada file yang diunggah.');
@@ -479,9 +568,11 @@ app.post('/api/upload', (req, res) => {
 
 // Endpoint Download HTML -> DOC/DOCX
 app.post('/api/download', (req, res) => {
-    const { htmlContent, format = 'docx' } = req.body;
+    const { htmlContent, format = 'docx', fileName } = req.body;
     if (!htmlContent) return res.status(400).send('Konten dokumen kosong.');
     if (!['doc', 'docx'].includes(format)) return res.status(400).send('Format download tidak valid.');
+
+    const sanitizedFileName = (fileName || '').replace(/[\\/:*?"<>|]/g, '').trim() || 'Dokumen_Arsitektur_Update';
 
     const time = Date.now();
     const tempHtmlPath = path.join(__dirname, 'uploads', `temp_${time}.html`);
@@ -491,6 +582,7 @@ app.post('/api/download', (req, res) => {
 
     // Enhance table dengan inline CSS style yang explicit untuk border rendering di DOCX
     let enhancedHtml = normalizeCssColors(htmlContent);
+    enhancedHtml = decodeTypographicEntities(enhancedHtml);
     const downloadMediaDir = path.join(__dirname, 'uploads', `download_media_${time}`);
     fs.ensureDirSync(downloadMediaDir);
     enhancedHtml = materializeEmbeddedImages(enhancedHtml, downloadMediaDir);
@@ -603,12 +695,14 @@ ${enhancedHtml}
             pandocArgs.push('-o', outputDocxPath);
             await runCommand('pandoc', pandocArgs);
             await applyWordTableGrid(outputDocxPath);
+            await ensureTableGridStyle(outputDocxPath);
+            await applyCellBackgrounds(outputDocxPath, enhancedHtml);
             await applyHtmlFontColors(outputDocxPath, enhancedHtml);
 
             const outputPath = format === 'docx'
                 ? outputDocxPath
                 : await convertDocxToLegacyDoc(outputDocxPath, outputDirectory);
-            const downloadName = `Dokumen_Arsitektur_Update.${format}`;
+            const downloadName = `${sanitizedFileName}.${format}`;
 
             res.download(outputPath, downloadName, (downloadErr) => {
                 if (downloadErr) console.error('Download Error:', downloadErr);
