@@ -5,71 +5,291 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Solution Analyst - Arsitektur Editor</title>
 
-  <!-- TinyMCE CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/plantuml-encoder@1.4.0/dist/plantuml-encoder.min.js"></script>
-  <!-- LocalForage CDN (Cache penyimpanan draf besar) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
   <style>
-    html, body { 
-      margin: 0; padding: 0; height: 100vh; overflow: hidden; 
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-      display: flex; flex-direction: column; 
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
     }
-    .navbar { 
-      background-color: #172b4d; color: white; padding: 12px 24px; z-index: 10; display: flex; justify-content: space-between; align-items: center;
-    }
-    .navbar h2 { margin: 0; font-size: 18px; font-weight: 600; }
-    .status-badge { font-size: 13px; background: #42526e; padding: 6px 12px; border-radius: 4px; font-weight: bold; transition: all 0.3s; }
-    .status-success { background: #36b37e; color: white; }
-    .status-error { background: #ff5630; color: white; }
-    .status-warning { background: #ffab00; color: #172b4d; }
-    
-    .toolbar { background-color: #f4f5f7; padding: 10px 24px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #dfe1e6; flex-wrap: wrap; }
-    .btn { background-color: #0052cc; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; }
-    .btn:hover { background-color: #0065ff; }
-    .btn-secondary { background-color: #ff991f; color: #172b4d; }
-    .btn-secondary:hover { background-color: #e2871b; }
-    .btn-success { background-color: #36b37e; margin-left: auto; }
-    .btn-success:hover { background-color: #2b825c; }
-    .btn-danger { background-color: #ff5630; color: white; }
-    .btn-danger:hover { background-color: #de4420; }
-    
-    .zoom-controls { display: flex; align-items: center; background: #fff; border: 1px solid #dfe1e6; border-radius: 4px; overflow: hidden; }
-    .zoom-btn { background: #fff; border: none; padding: 6px 10px; cursor: pointer; font-weight: bold; }
-    .zoom-btn:hover { background: #ebecf0; }
-    .zoom-label { padding: 0 8px; font-size: 13px; min-width: 45px; text-align: center; }
 
-    input[type="file"] { display: none; }
-    .editor-wrapper { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; background: #ffffff; }
+    .navbar {
+      background-color: #172b4d;
+      color: white;
+      padding: 12px 24px;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .navbar h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .status-badge {
+      font-size: 13px;
+      background: #42526e;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      transition: all 0.3s;
+    }
+
+    .status-success {
+      background: #36b37e;
+      color: white;
+    }
+
+    .status-error {
+      background: #ff5630;
+      color: white;
+    }
+
+    .status-warning {
+      background: #ffab00;
+      color: #172b4d;
+    }
+
+    .toolbar {
+      background-color: #f4f5f7;
+      padding: 10px 24px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      border-bottom: 1px solid #dfe1e6;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      background-color: #0052cc;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .btn:hover {
+      background-color: #0065ff;
+    }
+
+    .btn-secondary {
+      background-color: #ff991f;
+      color: #172b4d;
+    }
+
+    .btn-secondary:hover {
+      background-color: #e2871b;
+    }
+
+    .btn-success {
+      background-color: #36b37e;
+      margin-left: auto;
+    }
+
+    .btn-success:hover {
+      background-color: #2b825c;
+    }
+
+    .btn-danger {
+      background-color: #ff5630;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background-color: #de4420;
+    }
+
+    .zoom-controls {
+      display: flex;
+      align-items: center;
+      background: #fff;
+      border: 1px solid #dfe1e6;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .zoom-btn {
+      background: #fff;
+      border: none;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .zoom-btn:hover {
+      background: #ebecf0;
+    }
+
+    .zoom-label {
+      padding: 0 8px;
+      font-size: 13px;
+      min-width: 45px;
+      text-align: center;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .editor-wrapper {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
     .code-block {
-      margin: 12px 0; border: 1px solid #dfe1e6; border-radius: 6px; background: #f7f8fa; color: #111827; padding: 12px 14px; white-space: pre-wrap; font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; line-height: 1.5; overflow-x: auto;
+      margin: 12px 0;
+      border: 1px solid #dfe1e6;
+      border-radius: 6px;
+      background: #f7f8fa;
+      color: #111827;
+      padding: 12px 14px;
+      white-space: pre-wrap;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-x: auto;
     }
-    .plantuml-preview {
-      margin: 12px 0; border: 1px solid #dfe1e6; border-radius: 6px; padding: 12px; background: #ffffff;
-    }
-    .plantuml-preview img {
-      max-width: 100%; border: 0; display: block; margin: 0 auto;
-    }
-    .block-selector {
-      padding: 7px 10px; border: 1px solid #dfe1e6; border-radius: 4px; background: #fff; color: #172b4d; font-size: 12px;
-    }
-    .plantuml-preview { cursor: pointer; }
-    .plantuml-preview svg { max-width: 100%; height: auto; }
 
-    .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 1000; }
-    .modal-card { width: 960px; max-width: 95vw; max-height: 90vh; background: #1e1e1e; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45); }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #111827; color: #e5e7eb; font-weight: 600; font-size: 14px; }
-    .modal-close { background: none; border: none; color: #e5e7eb; cursor: pointer; font-size: 16px; }
-    .modal-body { display: flex; flex: 1; min-height: 420px; }
-    .plantuml-textarea { flex: 1; background: #1e1e1e; color: #d4d4d4; border: none; border-right: 1px solid #2d2d2d; padding: 16px; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; line-height: 1.6; resize: none; outline: none; }
-    .plantuml-preview-pane { flex: 1; background: #ffffff; padding: 16px; overflow: auto; display: flex; align-items: center; justify-content: center; }
-    .plantuml-preview-pane svg { max-width: 100%; }
-    .plantuml-preview-placeholder { color: #9ca3af; font-size: 13px; text-align: center; }
-    .modal-footer { display: flex; gap: 10px; justify-content: flex-end; padding: 12px 16px; background: #111827; }
+    .plantuml-preview {
+      margin: 12px 0;
+      border: 1px solid #dfe1e6;
+      border-radius: 6px;
+      padding: 12px;
+      background: #ffffff;
+      cursor: pointer;
+    }
+
+    .plantuml-preview img {
+      max-width: 100%;
+      border: 0;
+      display: block;
+      margin: 0 auto;
+    }
+
+    .plantuml-preview svg {
+      max-width: 100%;
+      height: auto;
+    }
+
+    .block-selector {
+      padding: 7px 10px;
+      border: 1px solid #dfe1e6;
+      border-radius: 4px;
+      background: #fff;
+      color: #172b4d;
+      font-size: 12px;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-card {
+      width: 960px;
+      max-width: 95vw;
+      max-height: 90vh;
+      background: #1e1e1e;
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: #111827;
+      color: #e5e7eb;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: #e5e7eb;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    .modal-body {
+      display: flex;
+      flex: 1;
+      min-height: 420px;
+    }
+
+    .plantuml-textarea {
+      flex: 1;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border: none;
+      border-right: 1px solid #2d2d2d;
+      padding: 16px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      resize: none;
+      outline: none;
+    }
+
+    .plantuml-preview-pane {
+      flex: 1;
+      background: #ffffff;
+      padding: 16px;
+      overflow: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .plantuml-preview-pane svg {
+      max-width: 100%;
+    }
+
+    .plantuml-preview-placeholder {
+      color: #9ca3af;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .modal-footer {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      padding: 12px 16px;
+      background: #111827;
+    }
   </style>
 </head>
+
 <body>
 
 <div class="navbar">
@@ -78,12 +298,26 @@
 </div>
 
 <div class="toolbar">
-  <!-- DOC upload sementara di-hide karena hasil konversinya masih berantakan; hanya DOCX yang diterima untuk saat ini. -->
-  <input type="file" id="fallbackFileInput" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="handleFallbackUpload(event)">
-  <button class="btn" onclick="openDocument()">📖 Buka Dokumen</button>
-  <button class="btn btn-secondary" onclick="saveDirectlyToFile()">💾 Simpan (Timpa File Lokal)</button>
-  <button class="btn btn-danger" onclick="closeDocument()">✖️ Tutup & Clear Cache</button>
-  
+
+  <input
+    type="file"
+    id="fallbackFileInput"
+    accept=".docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+    onchange="handleFallbackUpload(event)"
+  >
+
+  <button class="btn" onclick="openDocument()">
+    📖 Buka Dokumen
+  </button>
+
+  <button class="btn btn-secondary" onclick="saveDirectlyToFile()">
+    💾 Simpan (Timpa File Lokal)
+  </button>
+
+  <button class="btn btn-danger" onclick="closeDocument()">
+    ✖️ Tutup & Clear Cache
+  </button>
+
   <div class="zoom-controls">
     <button class="zoom-btn" onclick="zoomOut()">➖</button>
     <span class="zoom-label" id="zoomLabel">100%</span>
@@ -96,15 +330,18 @@
     <option value="json">JSON</option>
     <option value="plantuml">PlantUML</option>
   </select>
-  <button class="btn btn-secondary" onclick="insertCodeBlockFromSelector()">Insert Block</button>
+
+  <button class="btn btn-secondary" onclick="insertCodeBlockFromSelector()">
+    Insert Block
+  </button>
 
   <select id="downloadFormat" aria-label="Format download" style="display:none;">
     <option value="docx">Download DOCX</option>
-    <!-- Download DOC sementara di-hide karena hasil konversinya masih berantakan.
-    <option value="doc">Download DOC</option>
-    -->
   </select>
-  <button class="btn btn-success" onclick="downloadDocument()">⬇️ Download File Baru</button>
+
+  <button class="btn btn-success" onclick="downloadDocument()">
+    ⬇️ Download File Baru
+  </button>
 </div>
 
 <div class="editor-wrapper">
@@ -113,27 +350,47 @@
 
 <div id="plantumlModalOverlay" class="modal-overlay">
   <div class="modal-card">
+
     <div class="modal-header">
       <span>PlantUML Editor</span>
       <button class="modal-close" onclick="closePlantUmlModal()">✕</button>
     </div>
+
     <div class="modal-body">
-      <textarea id="plantumlSource" class="plantuml-textarea" spellcheck="false" placeholder="Tempel kode PlantUML (.wsd) di sini..."></textarea>
+      <textarea
+        id="plantumlSource"
+        class="plantuml-textarea"
+        spellcheck="false"
+        placeholder="Tempel kode PlantUML (.wsd) di sini..."
+      ></textarea>
+
       <div class="plantuml-preview-pane" id="plantumlPreviewPane">
-        <span class="plantuml-preview-placeholder">Klik "Preview" untuk melihat diagram</span>
+        <span class="plantuml-preview-placeholder">
+          Klik "Preview" untuk melihat diagram
+        </span>
       </div>
     </div>
+
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="previewPlantUmlInModal()">▶ Preview</button>
-      <button class="btn btn-success" onclick="confirmInsertPlantUml()">✔ Sisipkan ke Dokumen</button>
-      <button class="btn btn-danger" onclick="closePlantUmlModal()">Batal</button>
+      <button class="btn btn-secondary" onclick="previewPlantUmlInModal()">
+        ▶ Preview
+      </button>
+
+      <button class="btn btn-success" onclick="confirmInsertPlantUml()">
+        ✔ Sisipkan ke Dokumen
+      </button>
+
+      <button class="btn btn-danger" onclick="closePlantUmlModal()">
+        Batal
+      </button>
     </div>
+
   </div>
 </div>
 
 <script>
   let currentZoom = 100;
-  let fileHandle = null; 
+  let fileHandle = null;
   let currentFileBaseName = 'Dokumen_Arsitektur_Update';
 
   function setStatus(message, type = 'success') {
@@ -151,482 +408,1767 @@
     selector: '#editor',
     height: '100%',
     width: '100%',
+
     menubar: 'file edit view insert format tools table help',
-    plugins: 'table lists link code image advlist fullscreen paste wordcount',
-    toolbar: 'undo redo | blocks | bold italic forecolor backcolor | alignleft aligncenter alignright alignjustify | table tabledelete | numlist bullist | image fullscreen',
+
+    plugins:
+      'table lists link code image advlist fullscreen paste wordcount',
+
+    toolbar:
+      'undo redo | blocks | bold italic underline strikethrough forecolor backcolor | alignleft aligncenter alignright alignjustify | table tabledelete | numlist bullist | image fullscreen',
+
     paste_data_images: true,
-    promotion: false, 
-    branding: false,  
+    promotion: false,
+    branding: false,
+
     table_column_resizing: 'resizetable',
     table_resize_bars: true,
+
     image_title: true,
     automatic_uploads: true,
     file_picker_types: 'image',
-    extended_valid_elements: 'svg[*],path[*],g[*],rect[*],circle[*],ellipse[*],text[*],tspan[*],line[*],polygon[*],polyline[*],defs[*],marker[*],image[*]',
-    custom_elements: 'svg,path,g,defs,marker,tspan',
-    
+
+    /*
+     * Sangat penting:
+     * - span/font untuk warna text
+     * - strike/s/del untuk strikethrough
+     * - ul/ol/li untuk bullet library
+     * - img untuk gambar
+     */
+    extended_valid_elements:
+      'span[*],font[*],strike[*],s[*],del[*],u[*],strong[*],b[*],em[*],i[*],a[*],ul[*],ol[*],li[*],p[*],div[*],table[*],thead[*],tbody[*],tfoot[*],tr[*],td[*],th[*],img[*],svg[*],path[*],g[*],rect[*],circle[*],ellipse[*],text[*],tspan[*],line[*],polygon[*],polyline[*],defs[*],marker[*],image[*]',
+
+    valid_styles: {
+      '*':
+        'color,background-color,font-family,font-size,font-weight,font-style,text-decoration,text-align,vertical-align,line-height,border,border-collapse,padding,margin,width,height,display,white-space,list-style,list-style-type,list-style-position'
+    },
+
+    verify_html: false,
+
+    custom_elements:
+      'svg,path,g,defs,marker,tspan',
+
     file_picker_callback: function (cb, value, meta) {
-      var input = document.createElement('input');
+      const input = document.createElement('input');
+
       input.setAttribute('type', 'file');
       input.setAttribute('accept', 'image/*');
+
       input.onchange = function () {
-        var file = this.files[0];
-        var reader = new FileReader();
+        const file = this.files[0];
+
+        if (!file) return;
+
+        const reader = new FileReader();
+
         reader.onload = function () {
-          var id = 'blobid' + (new Date()).getTime();
-          var blobCache = tinymce.activeEditor.editorUpload.blobCache;
-          var base64 = reader.result.split(',')[1];
-          var blobInfo = blobCache.create(id, file, base64);
+          const id = 'blobid' + new Date().getTime();
+          const blobCache =
+            tinymce.activeEditor.editorUpload.blobCache;
+
+          const base64 = reader.result.split(',')[1];
+
+          const blobInfo = blobCache.create(
+            id,
+            file,
+            base64
+          );
+
           blobCache.add(blobInfo);
-          cb(blobInfo.blobUri(), { title: file.name });
+
+          cb(
+            blobInfo.blobUri(),
+            {
+              title: file.name
+            }
+          );
         };
+
         reader.readAsDataURL(file);
       };
+
       input.click();
     },
+
     images_upload_handler: function (blobInfo, progress) {
-      return new Promise((resolve) => resolve('data:' + blobInfo.blob().type + ';base64,' + blobInfo.base64()));
+      return new Promise((resolve) => {
+        resolve(
+          'data:' +
+          blobInfo.blob().type +
+          ';base64,' +
+          blobInfo.base64()
+        );
+      });
     },
 
     content_style: `
-      body { font-family: 'Segoe UI', Calibri, Arial, sans-serif; font-size: 14px; line-height: 1.6; margin: 0; padding: 25px; background-color: #ffffff; color: #000000; box-sizing: border-box; transition: transform 0.2s ease-in-out; transform-origin: top left; }
-      table { border-collapse: collapse; width: 100%; margin: 15px 0; border: 1px solid #000000; }
-      td, th { border: 1px solid #000000; padding: 8px; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; word-break: normal; }
-      th { font-weight: bold; background-color: #f2f2f2; }
-      table table { table-layout: auto; }
-      table table td, table table th { min-width: 60px; }
-      img { max-width: 100%; height: auto; display: block; margin: 10px 0; }
-      p { margin-top: 0; margin-bottom: 0.8em; }
+      body {
+        font-family: 'Segoe UI', Calibri, Arial, sans-serif;
+        font-size: 14px;
+        line-height: 1.6;
+        margin: 0;
+        padding: 25px;
+        background-color: #ffffff;
+        color: #000000;
+        box-sizing: border-box;
+        transition: transform 0.2s ease-in-out;
+        transform-origin: top left;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 15px 0;
+        border: 1px solid #000000;
+      }
+
+      td,
+      th {
+        border: 1px solid #000000;
+        padding: 8px;
+        vertical-align: top;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        word-break: normal;
+      }
+
+      th {
+        font-weight: bold;
+        background-color: #f2f2f2;
+      }
+
+      table table {
+        table-layout: auto;
+      }
+
+      table table td,
+      table table th {
+        min-width: 60px;
+      }
+
+      img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: 10px 0;
+      }
+
+      p {
+        margin-top: 0;
+        margin-bottom: 0.8em;
+      }
+
+      s,
+      strike,
+      del {
+        text-decoration: line-through !important;
+      }
+
+      ul,
+      ol {
+        padding-left: 28px;
+      }
+
+      li {
+        list-style-position: outside;
+      }
+
+      ul ul {
+        list-style-type: circle;
+      }
+
+      ul ul ul {
+        list-style-type: square;
+      }
     `,
+
     setup: function (editor) {
+
       editor.on('init', function () {
-        editor.getBody().setAttribute('contenteditable', true);
-        
-        localforage.getItem('docx_editor_draft').then(function(savedDraft) {
-          if (savedDraft && savedDraft.trim() !== '') {
-            editor.setContent(savedDraft);
-            setStatus('✓ Draf Dipulihkan (Ingat: Hubungan file lokal terputus karena refresh)', 'warning');
-          }
-        }).catch(function(err) {
-            console.error('Gagal mengambil cache:', err);
-        });
+        editor.getBody().setAttribute(
+          'contenteditable',
+          true
+        );
+
+        localforage
+          .getItem('docx_editor_draft')
+          .then(function (savedDraft) {
+
+            if (
+              savedDraft &&
+              savedDraft.trim() !== ''
+            ) {
+              editor.setContent(savedDraft);
+
+              setStatus(
+                '✓ Draf Dipulihkan (Ingat: Hubungan file lokal terputus karena refresh)',
+                'warning'
+              );
+            }
+
+          })
+          .catch(function (err) {
+            console.error(
+              'Gagal mengambil cache:',
+              err
+            );
+          });
       });
 
-      editor.on('keyup change ExecCommand Undo Redo', function () {
-        const content = editor.getContent();
-        localforage.setItem('docx_editor_draft', content).then(function () {
-          setStatus('✓ Tersimpan Sementara (Draf Aman)', 'success');
-        }).catch(function(err) {
-          setStatus('⚠️ Gagal menyimpan ke cache.', 'error');
-        });
-      });
+      editor.on(
+        'keyup change ExecCommand Undo Redo',
+        function () {
+
+          const content =
+            editor.getContent();
+
+          localforage
+            .setItem(
+              'docx_editor_draft',
+              content
+            )
+            .then(function () {
+
+              setStatus(
+                '✓ Tersimpan Sementara (Draf Aman)',
+                'success'
+              );
+
+            })
+            .catch(function (err) {
+
+              setStatus(
+                '⚠️ Gagal menyimpan ke cache.',
+                'error'
+              );
+
+            });
+        }
+      );
 
       editor.on('dblclick', function (event) {
-        const block = event.target.closest && event.target.closest('.plantuml-preview');
-        if (block) openPlantUmlModal(block);
+
+        const block =
+          event.target.closest &&
+          event.target.closest(
+            '.plantuml-preview'
+          );
+
+        if (block) {
+          openPlantUmlModal(block);
+        }
       });
     }
   });
 
-  // Fitur Zoom
-  function zoomIn() { if (currentZoom < 200) { currentZoom += 10; applyZoom(); } }
-  function zoomOut() { if (currentZoom > 50) { currentZoom -= 10; applyZoom(); } }
+  function zoomIn() {
+    if (currentZoom < 200) {
+      currentZoom += 10;
+      applyZoom();
+    }
+  }
+
+  function zoomOut() {
+    if (currentZoom > 50) {
+      currentZoom -= 10;
+      applyZoom();
+    }
+  }
+
   function applyZoom() {
-    const body = tinymce.get('editor').getDoc().body;
-    body.style.transform = `scale(${currentZoom / 100})`;
-    body.style.width = `${100 / (currentZoom / 100)}%`; 
-    document.getElementById('zoomLabel').innerText = `${currentZoom}%`;
+
+    const body =
+      tinymce.get('editor').getDoc().body;
+
+    body.style.transform =
+      `scale(${currentZoom / 100})`;
+
+    body.style.width =
+      `${100 / (currentZoom / 100)}%`;
+
+    document.getElementById(
+      'zoomLabel'
+    ).innerText = `${currentZoom}%`;
   }
 
   function normalizeTextEntities(value) {
+
     return value
-      .replace(/&amp;#39;|&amp;#039;|&#39;|&#039;|&#x27;|&apos;/gi, "'")
+      .replace(
+        /&amp;#39;|&amp;#039;|&#39;|&#039;|&#x27;|&apos;/gi,
+        "'"
+      )
       .replace(/&quot;/gi, '"')
       .replace(/&nbsp;/gi, ' ')
-      .replace(/&#x2019;|&#8217;|&rsquo;/gi, "'")
-      .replace(/&#x2018;|&#8216;|&lsquo;/gi, "'")
-      .replace(/&mdash;/gi, '—')
-      .replace(/&ndash;/gi, '–');
+      .replace(
+        /&#x2019;|&#8217;|&rsquo;/gi,
+        "'"
+      )
+      .replace(
+        /&#x2018;|&#8216;|&lsquo;/gi,
+        "'"
+      )
+      .replace(
+        /&mdash;/gi,
+        '—'
+      )
+      .replace(
+        /&ndash;/gi,
+        '–'
+      );
   }
 
-  // Normalize incoming HTML untuk mencegah nested table terlalu rapat
-  function normalizeNestedTableLayout(htmlContent) {
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = htmlContent;
+  function normalizeNestedTableLayout(
+    htmlContent
+  ) {
 
-    // Confluence exports fixed colgroup widths that squeeze nested tables until
-    // every word wraps one letter per line. Strip those fixed widths so the
-    // browser can size nested columns based on their actual content.
-    tempDiv.querySelectorAll('table table').forEach(nestedTable => {
-      Array.from(nestedTable.children).forEach(child => {
-        if (child.tagName === 'COLGROUP') child.remove();
+    const tempDiv =
+      document.createElement('div');
+
+    tempDiv.innerHTML =
+      htmlContent;
+
+    tempDiv
+      .querySelectorAll('table table')
+      .forEach(nestedTable => {
+
+        Array.from(
+          nestedTable.children
+        ).forEach(child => {
+
+          if (
+            child.tagName === 'COLGROUP'
+          ) {
+            child.remove();
+          }
+
+        });
+
+        nestedTable.setAttribute(
+          'border',
+          '1'
+        );
+
+        nestedTable.setAttribute(
+          'cellpadding',
+          '6'
+        );
+
+        nestedTable.setAttribute(
+          'cellspacing',
+          '0'
+        );
+
+        let style =
+          nestedTable.getAttribute(
+            'style'
+          ) || '';
+
+        style = style.replace(
+          /table-layout\s*:\s*[^;]+;?/gi,
+          ''
+        );
+
+        if (
+          !style.includes(
+            'border-collapse'
+          )
+        ) {
+          style +=
+            '; border-collapse: collapse';
+        }
+
+        if (
+          !style.includes('margin')
+        ) {
+          style += '; margin: 4px 0';
+        }
+
+        style +=
+          '; table-layout: auto';
+
+        nestedTable.setAttribute(
+          'style',
+          style
+            .replace(
+              /^\s*;\s*/,
+              ''
+            )
+            .trim()
+        );
+
+        nestedTable
+          .querySelectorAll(
+            'td, th'
+          )
+          .forEach(cell => {
+
+            cell.removeAttribute(
+              'width'
+            );
+
+            let cellStyle =
+              cell.getAttribute(
+                'style'
+              ) || '';
+
+            cellStyle =
+              cellStyle.replace(
+                /width\s*:\s*[^;]+;?/gi,
+                ''
+              );
+
+            if (
+              !cellStyle.includes(
+                'padding'
+              )
+            ) {
+              cellStyle +=
+                '; padding: 4px 6px';
+            }
+
+            if (
+              !cellStyle.includes(
+                'border'
+              )
+            ) {
+              cellStyle +=
+                '; border: 1px solid #999';
+            }
+
+            if (
+              !cellStyle.includes(
+                'vertical-align'
+              )
+            ) {
+              cellStyle +=
+                '; vertical-align: top';
+            }
+
+            cellStyle +=
+              '; min-width: 60px';
+
+            cell.setAttribute(
+              'style',
+              cellStyle
+                .replace(
+                  /^\s*;\s*/,
+                  ''
+                )
+                .trim()
+            );
+          });
       });
 
-      nestedTable.setAttribute('border', '1');
-      nestedTable.setAttribute('cellpadding', '6');
-      nestedTable.setAttribute('cellspacing', '0');
-      
-      let style = nestedTable.getAttribute('style') || '';
-      style = style.replace(/table-layout\s*:\s*[^;]+;?/gi, '');
-      if (!style.includes('border-collapse')) style += '; border-collapse: collapse';
-      if (!style.includes('margin')) style += '; margin: 4px 0';
-      style += '; table-layout: auto';
-      nestedTable.setAttribute('style', style.replace(/^\s*;\s*/, '').trim());
+    tempDiv
+      .querySelectorAll('table')
+      .forEach(table => {
 
-      nestedTable.querySelectorAll('td, th').forEach(cell => {
-        cell.removeAttribute('width');
-        let cellStyle = cell.getAttribute('style') || '';
-        cellStyle = cellStyle.replace(/width\s*:\s*[^;]+;?/gi, '');
-        if (!cellStyle.includes('padding')) cellStyle += '; padding: 4px 6px';
-        if (!cellStyle.includes('border')) cellStyle += '; border: 1px solid #999';
-        if (!cellStyle.includes('vertical-align')) cellStyle += '; vertical-align: top';
-        cellStyle += '; min-width: 60px';
-        cell.setAttribute('style', cellStyle.replace(/^\s*;\s*/, '').trim());
+        if (
+          table.querySelector('table')
+        ) {
+          return;
+        }
+
+        table.setAttribute(
+          'border',
+          '1'
+        );
+
+        table.setAttribute(
+          'cellpadding',
+          '6'
+        );
+
+        table.setAttribute(
+          'cellspacing',
+          '0'
+        );
+
+        let style =
+          table.getAttribute(
+            'style'
+          ) || '';
+
+        if (
+          !style.includes(
+            'border-collapse'
+          )
+        ) {
+          style +=
+            '; border-collapse: collapse';
+        }
+
+        if (
+          !style.includes('width:')
+        ) {
+          style +=
+            '; width: 100%';
+        }
+
+        table.setAttribute(
+          'style',
+          style
+            .replace(
+              /^\s*;\s*/,
+              ''
+            )
+            .trim()
+        );
       });
-    });
 
-    // 3. Process main tables while preserving their source widths.
-    tempDiv.querySelectorAll('table').forEach(table => {
-      // Skip jika sudah nested (handled di atas)
-      if (table.querySelector('table')) return;
-      
-      table.setAttribute('border', '1');
-      table.setAttribute('cellpadding', '6');
-      table.setAttribute('cellspacing', '0');
-      
-      let style = table.getAttribute('style') || '';
-      if (!style.includes('border-collapse')) style += '; border-collapse: collapse';
-      if (!style.includes('width:')) style += '; width: 100%';
-      table.setAttribute('style', style.replace(/^\s*;\s*/, '').trim());
-    });
+    tempDiv
+      .querySelectorAll(
+        'strike, s, del'
+      )
+      .forEach(node => {
+
+        node.style.textDecoration =
+          'line-through';
+
+      });
+
+    normalizeDuplicateListMarkers(
+      tempDiv
+    );
 
     return tempDiv.innerHTML;
   }
 
-  async function ensurePlantUmlImage(container) {
-    if (!container || !container.getAttribute('data-plantuml')) return;
-    const source = container.getAttribute('data-plantuml');
-    try {
-      const encoded = encodeURIComponent(window.plantumlEncoder.encode(source));
-      const response = await fetch(`https://www.plantuml.com/plantuml/svg/${encoded}`);
-      const svgText = await response.text();
-      const dataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
-      const img = document.createElement('img');
-      img.src = dataUri;
-      img.alt = 'PlantUML preview';
-      container.innerHTML = '';
-      container.appendChild(img);
-    } catch (error) {
-      container.innerHTML = '<pre class="code-block">PlantUML preview failed to load.</pre>';
-    }
-  }
+  function normalizeDuplicateListMarkers(
+    root
+  ) {
 
-  // MENYESUAIKAN HTML DENGAN INLINE STYLE AGAR PANDOC MEMBACA STRUKTUR SECARA 1:1
-  async function enhanceHtmlForDownload(htmlContent) {
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = htmlContent;
-    
-    const plantUmlNodes = Array.from(tempDiv.querySelectorAll('.plantuml-preview'));
-    await Promise.all(plantUmlNodes.map(node => ensurePlantUmlImage(node)));
+    root
+      .querySelectorAll('li')
+      .forEach(li => {
 
-    // 1. Format Tabel & Cell secara presisi
-    tempDiv.querySelectorAll('table').forEach(table => {
-      table.setAttribute('border', '1');
-      table.style.borderCollapse = 'collapse';
-      table.style.width = '100%';
-      table.style.border = '1px solid #000000';
-      table.style.marginTop = '10px';
-      table.style.marginBottom = '10px';
+        /*
+         * Word / Confluence kadang menyimpan
+         * bullet sebagai karakter literal di dalam
+         * <li>, padahal <li> sendiri sudah mempunyai
+         * marker dari browser.
+         *
+         * Contoh:
+         *   • Text
+         *
+         * di dalam:
+         *   <ul><li>...</li></ul>
+         *
+         * Karakter bullet literal tersebut dihapus
+         * supaya tidak muncul double bullet.
+         */
 
-      table.querySelectorAll('th, td').forEach(cell => {
-        cell.style.border = '1px solid #000000';
-        cell.style.padding = '6px 8px';
-        cell.style.verticalAlign = 'top';
-        if (!cell.style.color) cell.style.color = '#000000';
-        
-        if (cell.tagName.toLowerCase() === 'th') {
-          cell.style.fontWeight = 'bold';
-          cell.style.backgroundColor = '#f2f2f2';
+        const markerPattern =
+          /^[\s\u2022\u2023\u25A0\u25AA\u25CF\uF0B7\uF0A7]+/;
+
+        let node =
+          li.firstChild;
+
+        while (node) {
+
+          const next =
+            node.nextSibling;
+
+          if (
+            node.nodeType ===
+            Node.TEXT_NODE
+          ) {
+
+            const cleaned =
+              node.nodeValue.replace(
+                markerPattern,
+                ''
+              );
+
+            if (
+              cleaned !==
+              node.nodeValue
+            ) {
+              node.nodeValue =
+                cleaned;
+            }
+
+            if (
+              node.nodeValue.trim() !==
+              ''
+            ) {
+              break;
+            }
+
+          } else if (
+            node.nodeType ===
+            Node.ELEMENT_NODE
+          ) {
+
+            const tag =
+              node.tagName.toLowerCase();
+
+            if (
+              tag === 'ul' ||
+              tag === 'ol'
+            ) {
+              break;
+            }
+
+            const text =
+              node.textContent || '';
+
+            if (
+              markerPattern.test(
+                text
+              ) &&
+              text.trim().length <= 4
+            ) {
+
+              node.remove();
+
+            } else if (
+              markerPattern.test(
+                text
+              )
+            ) {
+
+              node.textContent =
+                text.replace(
+                  markerPattern,
+                  ''
+                );
+
+              break;
+
+            } else if (
+              text.trim() !== ''
+            ) {
+
+              break;
+            }
+          }
+
+          node = next;
         }
       });
-    });
-
-    // 2. Konversi Ukuran Gambar dari CSS ke Atribut HTML Murni (Dipahami oleh Pandoc)
-    tempDiv.querySelectorAll('img').forEach(img => {
-      let width = img.style.width || img.getAttribute('width');
-      let height = img.style.height || img.getAttribute('height');
-
-      if (width) {
-        let cleanWidth = width.toString().replace('px', '').replace('%', '');
-        img.setAttribute('width', cleanWidth);
-        img.style.width = cleanWidth + 'px';
-      }
-      if (height) {
-        let cleanHeight = height.toString().replace('px', '').replace('%', '');
-        img.setAttribute('height', cleanHeight);
-        img.style.height = cleanHeight + 'px';
-      }
-      img.style.display = 'block';
-    });
-
-    // 3. Pastikan Paragraf dan Heading Memiliki Spasi & Font Presisi
-    tempDiv.querySelectorAll('p').forEach(p => {
-      p.style.fontFamily = "'Segoe UI', Calibri, Arial, sans-serif";
-      p.style.fontSize = "11pt";
-      p.style.lineHeight = "1.5";
-      p.style.marginBottom = "8pt";
-      if (!p.style.color) p.style.color = '#000000';
-    });
-
-    tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(h => {
-      h.style.fontFamily = "'Segoe UI', Arial, sans-serif";
-      if (!h.style.color) h.style.color = '#111111';
-      h.style.marginTop = "12pt";
-      h.style.marginBottom = "4pt";
-    });
-
-    // 4. Bersihkan Atribut Internal TinyMCE
-    tempDiv.querySelectorAll('[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
-    tempDiv.querySelectorAll('*').forEach(el => {
-      Array.from(el.attributes)
-        .filter(attr => attr.name.startsWith('data-mce-'))
-        .forEach(attr => el.removeAttribute(attr.name));
-    });
-    
-    return tempDiv.innerHTML;
   }
 
-  // Buka Dokumen
-  async function openDocument() {
+  async function ensurePlantUmlImage(
+    container
+  ) {
+
+    if (
+      !container ||
+      !container.getAttribute(
+        'data-plantuml'
+      )
+    ) {
+      return;
+    }
+
+    const source =
+      container.getAttribute(
+        'data-plantuml'
+      );
+
     try {
-      if (window.showOpenFilePicker) {
-        const [handle] = await window.showOpenFilePicker({
-          types: [{ description: 'Word Documents', accept: {
-            /* DOC sementara di-hide, lihat komentar di toolbar */
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
-          } }]
-        });
-        fileHandle = handle;
-        const file = await fileHandle.getFile();
-        await uploadToServer(file);
-      } else {
-        document.getElementById('fallbackFileInput').click();
+
+      const encoded =
+        encodeURIComponent(
+          window.plantumlEncoder.encode(
+            source
+          )
+        );
+
+      const response =
+        await fetch(
+          `https://www.plantuml.com/plantuml/svg/${encoded}`
+        );
+
+      if (!response.ok) {
+        throw new Error(
+          'Gagal memuat PlantUML'
+        );
       }
-    } catch (err) {
-      console.log('Batal memilih file.');
+
+      const svgText =
+        await response.text();
+
+      const dataUri =
+        `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
+
+      const img =
+        document.createElement('img');
+
+      img.src = dataUri;
+      img.alt = 'PlantUML preview';
+
+      container.innerHTML = '';
+      container.appendChild(img);
+
+    } catch (error) {
+
+      container.innerHTML =
+        '<pre class="code-block">PlantUML preview failed to load.</pre>';
+
     }
   }
 
-  function handleFallbackUpload(event) {
-    if (event.target.files[0]) uploadToServer(event.target.files[0]);
+  /*
+   * Pastikan seluruh gambar benar-benar embedded
+   * sebelum dikirim ke server.
+   *
+   * TinyMCE dapat menggunakan blob:
+   * blob:http://localhost/...
+   *
+   * URL blob hanya hidup di browser.
+   * Jika URL tersebut langsung diberikan ke server,
+   * Word akan mendapatkan linked image yang rusak.
+   */
+  async function embedImagesForDownload(
+    root
+  ) {
+
+    const images =
+      Array.from(
+        root.querySelectorAll('img')
+      );
+
+    await Promise.all(
+      images.map(
+        async img => {
+
+          const src =
+            img.getAttribute(
+              'src'
+            ) || '';
+
+          if (
+            !src ||
+            src.startsWith('data:')
+          ) {
+            return;
+          }
+
+          if (
+            src.startsWith('blob:')
+          ) {
+
+            try {
+
+              const response =
+                await fetch(src);
+
+              if (!response.ok) {
+                throw new Error(
+                  'Image blob tidak dapat dibaca'
+                );
+              }
+
+              const blob =
+                await response.blob();
+
+              const reader =
+                new FileReader();
+
+              const dataUrl =
+                await new Promise(
+                  (resolve, reject) => {
+
+                    reader.onload =
+                      () => resolve(
+                        reader.result
+                      );
+
+                    reader.onerror =
+                      reject;
+
+                    reader.readAsDataURL(
+                      blob
+                    );
+                  }
+                );
+
+              img.setAttribute(
+                'src',
+                dataUrl
+              );
+
+            } catch (error) {
+
+              console.warn(
+                'Gagal meng-embed image blob:',
+                error
+              );
+            }
+          }
+        }
+      )
+    );
   }
 
-  async function uploadToServer(file) {
-    currentFileBaseName = file.name.replace(/\.(docx|doc)$/i, '') || currentFileBaseName;
-    const formData = new FormData();
-    formData.append('document', file);
-    const btnBuka = document.querySelector('.btn');
-    const originalText = btnBuka.innerText;
+  async function enhanceHtmlForDownload(
+    htmlContent
+  ) {
+
+    const tempDiv =
+      document.createElement('div');
+
+    tempDiv.innerHTML =
+      htmlContent;
+
+    const plantUmlNodes =
+      Array.from(
+        tempDiv.querySelectorAll(
+          '.plantuml-preview'
+        )
+      );
+
+    await Promise.all(
+      plantUmlNodes.map(
+        node =>
+          ensurePlantUmlImage(node)
+      )
+    );
+
+    /*
+     * FIX IMAGE:
+     * convert blob: -> data:image/...;base64,...
+     */
+    await embedImagesForDownload(
+      tempDiv
+    );
+
+    /*
+     * FIX STRIKETHROUGH:
+     * pastikan Word mendapatkan
+     * text-decoration: line-through.
+     */
+    tempDiv
+      .querySelectorAll(
+        'strike, s, del'
+      )
+      .forEach(node => {
+
+        node.style.textDecoration =
+          'line-through';
+
+      });
+
+    /*
+     * FIX DOUBLE BULLET:
+     * hapus literal bullet jika sudah
+     * ada marker <li>.
+     */
+    normalizeDuplicateListMarkers(
+      tempDiv
+    );
+
+    tempDiv
+      .querySelectorAll('table')
+      .forEach(table => {
+
+        table.setAttribute(
+          'border',
+          '1'
+        );
+
+        table.style.borderCollapse =
+          'collapse';
+
+        table.style.width =
+          '100%';
+
+        table.style.border =
+          '1px solid #000000';
+
+        table.style.marginTop =
+          '10px';
+
+        table.style.marginBottom =
+          '10px';
+
+        table
+          .querySelectorAll(
+            'th, td'
+          )
+          .forEach(cell => {
+
+            cell.style.border =
+              '1px solid #000000';
+
+            cell.style.padding =
+              '6px 8px';
+
+            cell.style.verticalAlign =
+              'top';
+
+            if (
+              cell.tagName.toLowerCase() ===
+              'th'
+            ) {
+
+              cell.style.fontWeight =
+                'bold';
+
+              if (
+                !cell.style.backgroundColor
+              ) {
+                cell.style.backgroundColor =
+                  '#f2f2f2';
+              }
+            }
+          });
+      });
+
+    tempDiv
+      .querySelectorAll('img')
+      .forEach(img => {
+
+        const width =
+          img.style.width ||
+          img.getAttribute(
+            'width'
+          );
+
+        const height =
+          img.style.height ||
+          img.getAttribute(
+            'height'
+          );
+
+        if (width) {
+          img.setAttribute(
+            'width',
+            width.toString().trim()
+          );
+        }
+
+        if (height) {
+          img.setAttribute(
+            'height',
+            height.toString().trim()
+          );
+        }
+
+        img.style.maxWidth =
+          '100%';
+
+        if (!height) {
+          img.style.height =
+            'auto';
+        }
+
+        img.style.display =
+          'block';
+      });
+
+    tempDiv
+      .querySelectorAll('p')
+      .forEach(p => {
+
+        p.style.fontFamily =
+          "'Segoe UI', Calibri, Arial, sans-serif";
+
+        p.style.fontSize =
+          '11pt';
+
+        p.style.lineHeight =
+          '1.5';
+
+        p.style.marginBottom =
+          '8pt';
+      });
+
+    tempDiv
+      .querySelectorAll(
+        'h1, h2, h3, h4, h5, h6'
+      )
+      .forEach(h => {
+
+        h.style.fontFamily =
+          "'Segoe UI', Arial, sans-serif";
+
+        h.style.marginTop =
+          '12pt';
+
+        h.style.marginBottom =
+          '4pt';
+      });
+
+    tempDiv
+      .querySelectorAll(
+        'ul, ol'
+      )
+      .forEach(list => {
+
+        list.style.listStylePosition =
+          'outside';
+
+      });
+
+    tempDiv
+      .querySelectorAll(
+        '[contenteditable]'
+      )
+      .forEach(el => {
+
+        el.removeAttribute(
+          'contenteditable'
+        );
+
+      });
+
+    tempDiv
+      .querySelectorAll('*')
+      .forEach(el => {
+
+        Array.from(
+          el.attributes
+        )
+          .filter(
+            attr =>
+              attr.name.startsWith(
+                'data-mce-'
+              )
+          )
+          .forEach(
+            attr =>
+              el.removeAttribute(
+                attr.name
+              )
+          );
+      });
+
+    return tempDiv.innerHTML;
+  }
+
+  async function openDocument() {
 
     try {
-      btnBuka.innerText = "⏳ Memproses...";
-      setStatus('Sedang mengonversi dokumen...', 'warning');
-      
-      const response = await fetch('/api/upload', { method: 'POST', body: formData });
-      if (!response.ok) throw new Error('Gagal koneksi ke server.');
-      
-      const data = await response.json();
-      let cleanHtml = data.html
-        .replace(/contenteditable="false"/gi, 'contenteditable="true"')
-        .replace(/readonly/gi, '')
-        .replace(/disabled/gi, '');
-      cleanHtml = normalizeTextEntities(cleanHtml);
-      
-      // Normalize nested table layout sebelum load ke editor
-      cleanHtml = normalizeNestedTableLayout(cleanHtml);
-      
-      tinymce.get('editor').setContent(cleanHtml);
-      
-      localforage.setItem('docx_editor_draft', cleanHtml).catch(function(err) {
-        console.warn('Gagal menyimpan cache baru.');
-      });
-      
-      setStatus('✓ File Berhasil Terbuka', 'success');
+
+      if (
+        window.showOpenFilePicker
+      ) {
+
+        const [handle] =
+          await window.showOpenFilePicker({
+            types: [
+              {
+                description:
+                  'Word Documents',
+
+                accept: {
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+                    ['.docx'],
+
+                  'application/msword':
+                    ['.doc']
+                }
+              }
+            ]
+          });
+
+        fileHandle =
+          handle;
+
+        const file =
+          await fileHandle.getFile();
+
+        await uploadToServer(
+          file
+        );
+
+      } else {
+
+        document
+          .getElementById(
+            'fallbackFileInput'
+          )
+          .click();
+      }
+
     } catch (err) {
+
+      console.log(
+        'Batal memilih file.'
+      );
+    }
+  }
+
+  function handleFallbackUpload(
+    event
+  ) {
+
+    if (
+      event.target.files[0]
+    ) {
+
+      uploadToServer(
+        event.target.files[0]
+      );
+    }
+  }
+
+  async function uploadToServer(
+    file
+  ) {
+
+    currentFileBaseName =
+      file.name.replace(
+        /\.(docx|doc)$/i,
+        ''
+      ) ||
+      currentFileBaseName;
+
+    const formData =
+      new FormData();
+
+    formData.append(
+      'document',
+      file
+    );
+
+    const btnBuka =
+      document.querySelector(
+        '.btn'
+      );
+
+    const originalText =
+      btnBuka.innerText;
+
+    try {
+
+      btnBuka.innerText =
+        '⏳ Memproses...';
+
+      setStatus(
+        'Sedang mengonversi dokumen...',
+        'warning'
+      );
+
+      const response =
+        await fetch(
+          '/api/upload',
+          {
+            method: 'POST',
+            body: formData
+          }
+        );
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          'Gagal koneksi ke server.'
+        );
+      }
+
+      const data =
+        await response.json();
+
+      let cleanHtml =
+        data.html
+          .replace(
+            /contenteditable="false"/gi,
+            'contenteditable="true"'
+          )
+          .replace(
+            /readonly/gi,
+            ''
+          )
+          .replace(
+            /disabled/gi,
+            ''
+          );
+
+      cleanHtml =
+        normalizeTextEntities(
+          cleanHtml
+        );
+
+      cleanHtml =
+        normalizeNestedTableLayout(
+          cleanHtml
+        );
+
+      const listWrapper =
+        document.createElement(
+          'div'
+        );
+
+      listWrapper.innerHTML =
+        cleanHtml;
+
+      normalizeDuplicateListMarkers(
+        listWrapper
+      );
+
+      cleanHtml =
+        listWrapper.innerHTML;
+
+      tinymce
+        .get('editor')
+        .setContent(
+          cleanHtml
+        );
+
+      localforage
+        .setItem(
+          'docx_editor_draft',
+          cleanHtml
+        )
+        .catch(function (err) {
+
+          console.warn(
+            'Gagal menyimpan cache baru.',
+            err
+          );
+
+        });
+
+      setStatus(
+        '✓ File Berhasil Terbuka',
+        'success'
+      );
+
+    } catch (err) {
+
       console.error(err);
-      setStatus('❌ Gagal membuka file. Cek koneksi server.', 'error');
+
+      setStatus(
+        `❌ Gagal membuka file: ${err.message}`,
+        'error'
+      );
+
     } finally {
-      btnBuka.innerText = originalText;
+
+      btnBuka.innerText =
+        originalText;
     }
   }
 
   function closeDocument() {
-    if (confirm("Yakin ingin menutup dokumen? Pastikan perubahan sudah Anda simpan atau download.")) {
-      localforage.removeItem('docx_editor_draft').then(function() {
-        tinymce.get('editor').setContent('');
-        fileHandle = null;
-        document.getElementById('fallbackFileInput').value = "";
-        setStatus('Menunggu file...', 'warning');
-      });
+
+    if (
+      confirm(
+        'Yakin ingin menutup dokumen? Pastikan perubahan sudah Anda simpan atau download.'
+      )
+    ) {
+
+      localforage
+        .removeItem(
+          'docx_editor_draft'
+        )
+        .then(function () {
+
+          tinymce
+            .get('editor')
+            .setContent('');
+
+          fileHandle =
+            null;
+
+          document
+            .getElementById(
+              'fallbackFileInput'
+            )
+            .value = '';
+
+          setStatus(
+            'Menunggu file...',
+            'warning'
+          );
+        });
     }
   }
 
-  function escapeHtml(value) {
+  function escapeHtml(
+    value
+  ) {
+
     return value
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\"/g, '&quot;');
+      .replace(
+        /&/g,
+        '&amp;'
+      )
+      .replace(
+        /</g,
+        '&lt;'
+      )
+      .replace(
+        />/g,
+        '&gt;'
+      )
+      .replace(
+        /\"/g,
+        '&quot;'
+      );
   }
 
   async function insertCodeBlockFromSelector() {
-    const editor = tinymce.get('editor');
-    const type = document.getElementById('blockType').value;
 
-    if (type === 'plantuml') {
-      openPlantUmlModal(null);
+    const editor =
+      tinymce.get(
+        'editor'
+      );
+
+    const type =
+      document.getElementById(
+        'blockType'
+      ).value;
+
+    if (
+      type === 'plantuml'
+    ) {
+
+      openPlantUmlModal(
+        null
+      );
+
       return;
     }
 
-    const selectedText = editor.selection.getContent({ format: 'text' }) || '';
-    const templateText = type === 'json'
-      ? '{\n  "name": "example",\n  "status": "ok"\n}'
-      : 'const value = "example";\nconsole.log(value);';
-    const content = selectedText || templateText;
-    const escaped = escapeHtml(content);
-    const block = `<pre class="code-block" data-language="${type}">${escaped}</pre>`;
-    editor.insertContent(block);
+    const selectedText =
+      editor.selection.getContent({
+        format: 'text'
+      }) || '';
+
+    const templateText =
+      type === 'json'
+        ? '{\n  "name": "example",\n  "status": "ok"\n}'
+        : 'const value = "example";\nconsole.log(value);';
+
+    const content =
+      selectedText ||
+      templateText;
+
+    const escaped =
+      escapeHtml(
+        content
+      );
+
+    const block =
+      `<pre class="code-block" data-language="${type}">${escaped}</pre>`;
+
+    editor.insertContent(
+      block
+    );
   }
 
-  let plantUmlEditingContainer = null;
+  let plantUmlEditingContainer =
+    null;
 
-  function openPlantUmlModal(existingContainer) {
-    plantUmlEditingContainer = existingContainer || null;
-    const source = existingContainer ? (existingContainer.getAttribute('data-plantuml') || '') : '@startuml\nAlice -> Bob: hello\n@enduml';
-    document.getElementById('plantumlSource').value = source;
-    const pane = document.getElementById('plantumlPreviewPane');
-    pane.innerHTML = '<span class="plantuml-preview-placeholder">Klik "Preview" untuk melihat diagram</span>';
-    document.getElementById('plantumlModalOverlay').style.display = 'flex';
-    if (source && source.trim()) previewPlantUmlInModal();
+  function openPlantUmlModal(
+    existingContainer
+  ) {
+
+    plantUmlEditingContainer =
+      existingContainer ||
+      null;
+
+    const source =
+      existingContainer
+        ? (
+            existingContainer.getAttribute(
+              'data-plantuml'
+            ) || ''
+          )
+        : '@startuml\nAlice -> Bob: hello\n@enduml';
+
+    document
+      .getElementById(
+        'plantumlSource'
+      )
+      .value =
+      source;
+
+    const pane =
+      document.getElementById(
+        'plantumlPreviewPane'
+      );
+
+    pane.innerHTML =
+      '<span class="plantuml-preview-placeholder">Klik "Preview" untuk melihat diagram</span>';
+
+    document
+      .getElementById(
+        'plantumlModalOverlay'
+      )
+      .style.display =
+      'flex';
+
+    if (
+      source &&
+      source.trim()
+    ) {
+      previewPlantUmlInModal();
+    }
   }
 
   function closePlantUmlModal() {
-    document.getElementById('plantumlModalOverlay').style.display = 'none';
-    plantUmlEditingContainer = null;
+
+    document
+      .getElementById(
+        'plantumlModalOverlay'
+      )
+      .style.display =
+      'none';
+
+    plantUmlEditingContainer =
+      null;
   }
 
   async function previewPlantUmlInModal() {
-    const source = document.getElementById('plantumlSource').value;
-    const pane = document.getElementById('plantumlPreviewPane');
+
+    const source =
+      document.getElementById(
+        'plantumlSource'
+      ).value;
+
+    const pane =
+      document.getElementById(
+        'plantumlPreviewPane'
+      );
+
     if (!source.trim()) {
-      pane.innerHTML = '<span class="plantuml-preview-placeholder">Masukkan kode PlantUML terlebih dahulu.</span>';
+
+      pane.innerHTML =
+        '<span class="plantuml-preview-placeholder">Masukkan kode PlantUML terlebih dahulu.</span>';
+
       return;
     }
-    pane.innerHTML = '<span class="plantuml-preview-placeholder">Membuat preview...</span>';
+
+    pane.innerHTML =
+      '<span class="plantuml-preview-placeholder">Membuat preview...</span>';
+
     try {
-      const encoded = encodeURIComponent(window.plantumlEncoder.encode(source));
-      const response = await fetch(`https://www.plantuml.com/plantuml/svg/${encoded}`);
-      if (!response.ok) throw new Error('Gagal memuat diagram');
-      const svgText = await response.text();
-      pane.innerHTML = svgText;
+
+      const encoded =
+        encodeURIComponent(
+          window.plantumlEncoder.encode(
+            source
+          )
+        );
+
+      const response =
+        await fetch(
+          `https://www.plantuml.com/plantuml/svg/${encoded}`
+        );
+
+      if (!response.ok) {
+        throw new Error(
+          'Gagal memuat diagram'
+        );
+      }
+
+      const svgText =
+        await response.text();
+
+      pane.innerHTML =
+        svgText;
+
     } catch (error) {
-      pane.innerHTML = '<span class="plantuml-preview-placeholder">Gagal membuat preview. Cek koneksi internet / sintaks PlantUML.</span>';
+
+      pane.innerHTML =
+        '<span class="plantuml-preview-placeholder">Gagal membuat preview. Cek koneksi internet / sintaks PlantUML.</span>';
     }
   }
 
   function confirmInsertPlantUml() {
-    const editor = tinymce.get('editor');
-    const source = document.getElementById('plantumlSource').value;
-    if (!source.trim()) { closePlantUmlModal(); return; }
 
-    const pane = document.getElementById('plantumlPreviewPane');
-    const svgMarkup = pane.querySelector('svg') ? pane.innerHTML : '<span class="plantuml-preview-placeholder">Klik dua kali untuk membuat preview ulang.</span>';
+    const editor =
+      tinymce.get(
+        'editor'
+      );
 
-    if (plantUmlEditingContainer) {
-      // setAttribute() stores the string as-is (no HTML parsing), so the raw source must not be pre-escaped here.
-      plantUmlEditingContainer.setAttribute('data-plantuml', source);
-      plantUmlEditingContainer.innerHTML = svgMarkup;
+    const source =
+      document.getElementById(
+        'plantumlSource'
+      ).value;
+
+    if (!source.trim()) {
+
+      closePlantUmlModal();
+
+      return;
+    }
+
+    const pane =
+      document.getElementById(
+        'plantumlPreviewPane'
+      );
+
+    const svgMarkup =
+      pane.querySelector('svg')
+        ? pane.innerHTML
+        : '<span class="plantuml-preview-placeholder">Klik dua kali untuk membuat preview ulang.</span>';
+
+    if (
+      plantUmlEditingContainer
+    ) {
+
+      plantUmlEditingContainer.setAttribute(
+        'data-plantuml',
+        source
+      );
+
+      plantUmlEditingContainer.innerHTML =
+        svgMarkup;
+
     } else {
-      const encodedSource = escapeHtml(source);
-      const previewMarkup = `<div class="plantuml-preview" data-plantuml="${encodedSource}" contenteditable="false">${svgMarkup}</div><p>&nbsp;</p>`;
-      editor.insertContent(previewMarkup);
+
+      const encodedSource =
+        escapeHtml(
+          source
+        );
+
+      const previewMarkup =
+        `<div class="plantuml-preview" data-plantuml="${encodedSource}" contenteditable="false">${svgMarkup}</div><p>&nbsp;</p>`;
+
+      editor.insertContent(
+        previewMarkup
+      );
     }
 
     closePlantUmlModal();
   }
 
   async function saveDirectlyToFile() {
-    let htmlContent = tinymce.get('editor').getContent();
-    if (!htmlContent) return setStatus('❌ Tidak ada konten untuk disimpan.', 'error');
-    
+
+    let htmlContent =
+      tinymce
+        .get('editor')
+        .getContent();
+
+    if (!htmlContent) {
+
+      return setStatus(
+        '❌ Tidak ada konten untuk disimpan.',
+        'error'
+      );
+    }
+
     if (!fileHandle) {
-      setStatus('⚠️ Akses file hilang karena refresh. Mengalihkan ke Download...', 'error');
+
+      setStatus(
+        '⚠️ Akses file hilang karena refresh. Mengalihkan ke Download...',
+        'error'
+      );
+
       return downloadDocument();
     }
 
-    htmlContent = await enhanceHtmlForDownload(htmlContent);
+    htmlContent =
+      await enhanceHtmlForDownload(
+        htmlContent
+      );
 
-    const btnSimpan = document.querySelector('.btn-secondary');
-    const originalText = btnSimpan.innerText;
-    btnSimpan.innerText = "⏳ Menyimpan...";
+    const btnSimpan =
+      document.querySelector(
+        '.btn-secondary'
+      );
+
+    const originalText =
+      btnSimpan.innerText;
+
+    btnSimpan.innerText =
+      '⏳ Menyimpan...';
 
     try {
-      const response = await fetch('/api/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ htmlContent, format: document.getElementById('downloadFormat').value, fileName: currentFileBaseName })
-      });
-      if (!response.ok) throw new Error('Gagal koneksi server');
 
-      const blob = await response.blob();
-      const writable = await fileHandle.createWritable();
-      await writable.write(blob);
+      const response =
+        await fetch(
+          '/api/download',
+          {
+            method: 'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json'
+            },
+
+            body: JSON.stringify({
+              htmlContent,
+              format:
+                document.getElementById(
+                  'downloadFormat'
+                ).value,
+              fileName:
+                currentFileBaseName
+            })
+          }
+        );
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          'Gagal koneksi server'
+        );
+      }
+
+      const blob =
+        await response.blob();
+
+      const writable =
+        await fileHandle.createWritable();
+
+      await writable.write(
+        blob
+      );
+
       await writable.close();
 
-      setStatus('✓ Berhasil Ditimpa ke File Asli', 'success');
+      setStatus(
+        '✓ Berhasil Ditimpa ke File Asli',
+        'success'
+      );
+
     } catch (err) {
+
       console.error(err);
-      setStatus('❌ Gagal menimpa. Pastikan file Word sedang tidak dibuka di aplikasi lain.', 'error');
+
+      setStatus(
+        `❌ Gagal menimpa: ${err.message}`,
+        'error'
+      );
+
     } finally {
-      btnSimpan.innerText = originalText;
+
+      btnSimpan.innerText =
+        originalText;
     }
   }
 
   async function downloadDocument() {
-    let htmlContent = tinymce.get('editor').getContent();
-    if (!htmlContent) return setStatus('❌ Tidak ada konten.', 'error');
 
-    htmlContent = await enhanceHtmlForDownload(htmlContent);
+    let htmlContent =
+      tinymce
+        .get('editor')
+        .getContent();
 
-    const btnDownload = document.querySelector('.btn-success');
-    const originalText = btnDownload.innerText;
-    btnDownload.innerText = "⏳ Memproses...";
-    setStatus('Sedang membuat file Word...', 'warning');
+    if (!htmlContent) {
+
+      return setStatus(
+        '❌ Tidak ada konten.',
+        'error'
+      );
+    }
+
+    htmlContent =
+      await enhanceHtmlForDownload(
+        htmlContent
+      );
+
+    const btnDownload =
+      document.querySelector(
+        '.btn-success'
+      );
+
+    const originalText =
+      btnDownload.innerText;
+
+    btnDownload.innerText =
+      '⏳ Memproses...';
+
+    setStatus(
+      'Sedang membuat file Word...',
+      'warning'
+    );
 
     try {
-      const format = document.getElementById('downloadFormat').value;
-      const response = await fetch('/api/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ htmlContent, format, fileName: currentFileBaseName })
-      });
-      if (!response.ok) throw new Error();
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${currentFileBaseName}.${format}`;
-      document.body.appendChild(a);
+      const format =
+        document
+          .getElementById(
+            'downloadFormat'
+          )
+          .value;
+
+      const response =
+        await fetch(
+          '/api/download',
+          {
+            method: 'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json'
+            },
+
+            body: JSON.stringify({
+              htmlContent,
+              format,
+              fileName:
+                currentFileBaseName
+            })
+          }
+        );
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          'Gagal membuat file Word.'
+        );
+      }
+
+      const blob =
+        await response.blob();
+
+      const url =
+        window.URL.createObjectURL(
+          blob
+        );
+
+      const a =
+        document.createElement(
+          'a'
+        );
+
+      a.href =
+        url;
+
+      a.download =
+        `${currentFileBaseName}.${format}`;
+
+      document.body.appendChild(
+        a
+      );
+
       a.click();
+
       a.remove();
-      
-      setStatus('✓ Berhasil Didownload', 'success');
+
+      window.URL.revokeObjectURL(
+        url
+      );
+
+      setStatus(
+        '✓ Berhasil Didownload',
+        'success'
+      );
+
     } catch (err) {
+
       console.error(err);
-      setStatus('❌ Gagal mengunduh file.', 'error');
+
+      setStatus(
+        `❌ Gagal mengunduh file: ${err.message}`,
+        'error'
+      );
+
     } finally {
-      btnDownload.innerText = originalText;
+
+      btnDownload.innerText =
+        originalText;
     }
   }
 </script>
